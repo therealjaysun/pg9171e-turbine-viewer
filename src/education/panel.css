@@ -6,7 +6,7 @@
 .learning-heading-top .icon-btn { margin-right: -7px; }
 .learning-heading h2 { font-size: 18px; line-height: 1.4; font-weight: 600; overflow-wrap: anywhere; }
 #learning-system { color: #77837b; font-size: 11px; line-height: 1.5; margin-top: 7px; }
-.learning-tabs { display: flex; gap: 16px; padding: 0 20px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.learning-tabs { display: flex; justify-content: space-between; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .learning-tabs button { padding: 14px 0 11px; background: none; border-bottom: 2px solid transparent; color: #6d7972; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .learning-tabs button[aria-selected="true"] { color: #246148; border-bottom-color: #36765b; }
 .learning-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 21px 20px 26px; scrollbar-gutter: stable; }
@@ -30,6 +30,16 @@ ul.learning-prose { padding-left: 17px; }
 .learning-sources a:hover { text-decoration: underline; }
 .learning-sources a span { flex-shrink: 0; }
 .learning-caveat { font-size: 10px; line-height: 1.7; color: #879087; margin-top: 20px; }
+.manufacturing-content .learning-prose { font-size: 13px; line-height: 1.75; }
+.manufacturing-steps { padding-left: 19px; }
+.manufacturing-steps h4 { font-size: 13px; font-weight: 600; color: #3e5548; margin: 0 0 5px; }
+.manufacturing-citations { display: flex; gap: 10px; margin-top: 4px; }
+.manufacturing-citations a { color: #326c55; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.manufacturing-family { border-top: 1px solid var(--line); }
+.manufacturing-family > summary { cursor: pointer; padding: 14px 0; color: #3e5548; font-size: 13px; font-weight: 500; line-height: 1.6; }
+.manufacturing-family > summary:focus-visible { outline: 2px solid #319875; outline-offset: -2px; }
+.manufacturing-family > .manufacturing-content { padding: 5px 0 22px; }
+.manufacturing-content .learning-sources a { display: block; overflow-wrap: anywhere; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 @media (min-width: 761px) {
   .guide-open .viewport { container-type: inline-size; }
@@ -59,7 +69,7 @@ ul.learning-prose { padding-left: 17px; }
   .guide-open .system-row .system-select { font-size: 10px; gap: 5px; }
   .learning-heading { padding: 15px 16px 12px; }
   .learning-content { padding: 18px 16px 24px; }
-  .learning-tabs { padding: 0 16px; }
+  .learning-tabs { padding: 0 12px; }
 }
 @media (max-width: 760px) {
   .guide-open { flex-direction: column; min-height: 650px; }
@@ -69,7 +79,7 @@ ul.learning-prose { padding-left: 17px; }
   .learning-heading-top { margin-bottom: 0; }
   .learning-heading h2 { font-size: 15px; }
   #learning-system { margin-top: 3px; font-size: 10px; }
-  .learning-tabs { padding: 0 17px; gap: 22px; }
+  .learning-tabs { padding: 0 12px; gap: 8px; }
   .learning-tabs button { padding: 10px 0 9px; }
   .learning-content { padding: 16px 17px 22px; }
   .guide-open .viewport-heading, .guide-open .axis-widget, .guide-open .view-subtitle { display: none; }

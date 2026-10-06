@@ -1,5 +1,6 @@
 import { compressorEducation } from './compressor.js';
 import { hotSectionEducation } from './hot-section.js';
+import { manufacturingForPart, manufacturingOverview } from './manufacturing.js';
 
 const video = seconds => ({ label: `Training video: ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`, url: `https://www.youtube.com/watch?v=4r1-IMMS73s&t=${seconds}s` });
 const bearingReference = { label: 'Kingsbury: hydrodynamic bearing principles', url: 'https://www.kingsbury.com/hydrodynamic-bearings/' };
@@ -80,6 +81,7 @@ const base = {
 };
 
 export const assemblyEducation = {
+  manufacturing: manufacturingOverview(),
   summary: 'A single-shaft, heavy-duty gas turbine with 17 compressor stages, 14 combustion chambers and three turbine stages.',
   keyIdea: 'Compression, combustion and expansion form one continuous flow path. Shaft work links the turbine back to the compressor.',
   operation: [
@@ -201,14 +203,13 @@ const systemLessons = {
 };
 
 export function educationForPart(part) {
-  const lesson = compressorEducation(part) || hotSectionEducation(part);
-  if (lesson) return lesson;
-  if (part.id === 'shaft') return shaft;
-  if (/^bearing-[123]$/.test(part.id)) return bearingEducation(Number(part.id.at(-1)));
-  if (part.id === 'base-frame') return base;
-  return null;
+  const lesson = compressorEducation(part) || hotSectionEducation(part)
+    || (part.id === 'shaft' ? shaft : null)
+    || (/^bearing-[123]$/.test(part.id) ? bearingEducation(Number(part.id.at(-1))) : null)
+    || (part.id === 'base-frame' ? base : null);
+  return lesson ? { ...lesson, manufacturing: manufacturingForPart(part) } : null;
 }
 
 export function educationForSystem(id) {
-  return systemLessons[id] || assemblyEducation;
+  return systemLessons[id] ? { ...systemLessons[id], manufacturing: manufacturingOverview(id) } : assemblyEducation;
 }

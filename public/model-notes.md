@@ -124,6 +124,25 @@ in the modeled assembly, not validated flow rates, structural adequacy or an
 exact as-built cooling circuit. A section can miss a narrow passage and correctly
 show solid metal. The separate OpenSCAD reconstruction is unchanged by R05.
 
+## Manufacturing Education
+
+The component guide includes manufacturing notes for all 110 selectable parts,
+organized by part family. Each production step and quality check has source links.
+The notes distinguish GE-authored historical practice, compatible replacement
+hardware, general supplier manufacturing and refurbishment examples. Patent
+embodiments are not treated as proof of production use in the video unit.
+
+The source video establishes visible architecture, not a factory process sheet.
+Unit-specific alloys, heat treatments, fixtures, coatings and inspection limits
+often remain unknown. Casting cores that form cooling cavities are temporary
+tooling, not permanent solid material inside a cooled blade. Rotor wheels, blades,
+casings and liners have different manufacturing routes; an assembly selected in
+the viewer can contain several separately manufactured components.
+
+These are educational process descriptions, not instructions to manufacture,
+repair or accept a service component. The manufacturing update changes no model
+geometry and supplies no production tolerances or certified material schedule.
+
 ## Editable Solid Source
 
 In `pg9171e.scad`, `exploded` is a 0-1 separation control, `cutaway` removes upper shell halves, and `show_casings`, `show_stators`, `show_base` and `component` control visibility. `component` accepts `all`, `inlet`, `compressor`, `combustion`, `turbine`, `exhaust` or `bearings` for separate solid export. Exact known populations remain present; reducing `$fn` changes tessellation only. The compressor rotor and stator blade populations are marked as estimated in the source.

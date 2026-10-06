@@ -29,7 +29,7 @@ The production site is written to `dist/` and needs an HTTP server, such as `npm
 - Shaded, CAD-edge, transparent casing, and wireframe rendering.
 - Orthographic/perspective projection, standard views, orbit/pan/zoom, and image capture.
 - 110 selectable components with source timestamps, focus, isolation, and assembly visibility.
-- Part guide with component-specific Function, Design and In service lessons, source links, and seven assembly overviews. Select a component in the model or tree to open it. Close with the X or Part guide button; the hidden preference persists across selections and reloads. Reopen with Part guide.
+- Part guide with component-specific Function, Design, In service and Manufacturing lessons, source links, and seven assembly overviews. Manufacturing covers production routes, quality checks and evidence limits with per-claim citations. Select a component in the model or tree to open it. Close with the X or Part guide button; the hidden preference persists across selections and reloads. Reopen with Part guide.
 - Slow inspection rotation and illustrative flow particles. Particle paths describe the assembled flow and are hidden in exploded view; they are not a flow simulation.
 - GLB and binary STL export of the full assembled model or the currently visible, separated components.
 - Editable simplified parametric OpenSCAD source.
@@ -80,3 +80,17 @@ The OpenSCAD source was evaluated successfully with the Manifold backend. Browse
 R05 verification passes 12,001 assembled cavity probes and 86 material controls across all 7,826 mesh instances; all 826 source geometries pass the tolerance-qualified boundary audit. The new `/tests/rotor-cooling.html` fixture passes 347 WebGL pixel assertions for actual-model bucket bores, surrounding metal and rotor cavities at desktop/mobile sizes, alongside the existing 89 section-rendering assertions. Viewer checks cover CAD mode, rotor motion and mobile framing without horizontal page overflow.
 
 R05 mesh exports contain 5,708,019 triangles: GLB 73.29 MB and binary STL 285.40 MB. GLB round-trip scale, bounds and all 110 named groups pass, as do strict STL facet checks. These are visualization meshes, not a complete cooling-flow or structural model.
+
+### Manufacturing Education
+
+All 110 selectable components have cited manufacturing notes. Repeated parts share their manufacturing-family research; cooled and uncooled hot-section stages remain differentiated. Assembly/system overviews expose expandable representative families without implying that one route applies to the whole machine.
+
+The notes distinguish documented GE practice from compatible replacement specifications, general supplier processes, refurbishment examples and patent embodiments. They do not establish the original factory routing of the video unit or turn the reconstruction into manufacturing CAD. No production tolerances, heat-treatment recipes or inspection acceptance limits are prescribed.
+
+Research ledgers record claim scope, source locators and coverage for [compressor hardware](docs/manufacturing-compressor.md), [combustion, turbine and exhaust](docs/manufacturing-hot-section.md), and [mechanical components](docs/manufacturing-mechanics.md). Each manufacturing step and quality check links directly to its supporting references in the demo.
+
+`npm run verify` checks every component's route, inspections, scope, limitations and citation keys, including representative-family mappings and unknown-ID rejection. Open `/tests/manufacturing-panel.html` on the local Vite server for tab navigation, selection, citations, expandable families and hide/reopen regression checks. The manufacturing update does not modify model geometry.
+
+Verified on 2026-10-06: 110 component records, seven system overviews, 43 distinct cited source URLs and 139 browser-panel assertions. Production-viewer checks at 1440, 1280, 1024, 390 and 320 pixels wide found no horizontal overflow; all four tabs fit the 308-pixel tablet panel. Hide/reopen persistence, mobile family expansion and rotor motion passed. Canvas checks found 11,034 changed motion pixels and a nonblank mobile model. The full model verification and production build pass; Vite retains its large-bundle advisory.
+
+![Manufacturing guide](exports/manufacturing-guide-desktop.png)

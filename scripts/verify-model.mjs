@@ -11,10 +11,12 @@ import {verifyCompressor} from './verify-compressor.mjs';
 import {verifyCombustion} from './verify-combustion.mjs';
 import {verifyExhaust} from './verify-exhaust.mjs';
 import {verifyWallBoundaries} from './verify-wall-boundaries.mjs';
+import { verifyManufacturing } from './verify-manufacturing.mjs';
 
 const model = buildAssembly();
 const byId = new Map(model.parts.map(part => [part.id, part]));
 const knownSystems = new Set(systems.map(system => system.id));
+verifyManufacturing(model.parts, systems);
 verifyHotSection(model);
 verifyMechanics(model);
 verifyCompressor(model);
