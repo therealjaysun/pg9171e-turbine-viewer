@@ -35,19 +35,35 @@ export function verifyHotSection(model) {
   for (const stage of [1, 2, 3]) {
     const rotor = rowFor(`turbine-wheel-${stage}`);
     const nozzle = rowFor(`turbine-nozzle-${stage}`);
+    const wheel = byId.get(`turbine-wheel-${stage}`).group;
+    assert.equal(wheel.userData.coolingFeedPaths?.length ?? 0, stage < 3 ? 6 : 0,
+      `Turbine stage ${stage}: inferred wheel-to-root feeds`);
+    const collectors = [];
+    wheel.traverse(object => {
+      if (object.geometry?.userData.rootCollector) collectors.push(object);
+    });
+    assert.equal(collectors.length, stage < 3 ? 1 : 0, `Turbine stage ${stage}: cooled root collector`);
+    if (collectors.length) {
+      assert.equal(collectors[0].count, rotor.count, `Turbine stage ${stage}: root collector pitch must match buckets`);
+      assert.equal(collectors[0].geometry.userData.rootCollector.individualBucketPlenumsSimplified, true,
+        `Turbine stage ${stage}: simplified root architecture must remain identified`);
+      assert.match(rotor.geometry.userData.coolingReference, /replacement.*not exact/i,
+        `Turbine stage ${stage}: replacement-reference pattern must not claim OEM dimensional fidelity`);
+    }
     const gap = rowBounds(rotor).min.x - rowBounds(nozzle).max.x;
     assert.ok(gap > 0.02, `Turbine stage ${stage}: nozzle and bucket rows interfere (${gap})`);
     minimumAxialGap = Math.min(minimumAxialGap, gap);
     for (const row of [rotor, nozzle]) {
       const paths = row.geometry.userData.coolingPaths;
-      assert.equal(paths?.length ?? 0, stage < 3 && row === rotor ? 3 : 0, `Turbine stage ${stage}: bucket cooling passage count`);
+      assert.equal(paths?.length ?? 0, row === rotor ? [0, 11, 6, 0][stage] : 0, `Turbine stage ${stage}: bucket cooling passage count`);
       if (!paths) continue;
       const probe = new THREE.Mesh(row.geometry, material);
       probe.updateMatrixWorld(true);
       for (const path of paths) {
-        for (const point of path.points.slice(1, -1)) {
+        for (let sample = 1; sample < path.points.length - 1; sample++) {
+          const point = path.points[sample];
           assert.equal(inside(probe, point), false, `Turbine stage ${stage}: cooling channel is filled`);
-          const wallPoint = [point[0] + path.radius * 1.7, point[1], point[2]];
+          const wallPoint = path.wallPoints[sample];
           assert.equal(inside(probe, wallPoint), true, `Turbine stage ${stage}: cooling channel lacks its surrounding wall`);
           passageSamples++;
         }

@@ -12,7 +12,11 @@ export function verifyMechanics(model) {
   const role=(id,name)=>meshes(id,object=>object.userData.geometryRole===name);
   const shaft=role('shaft','rotor-shaft');
   const forwardJournal=meshes('compressor-stub-shafts',object=>object.userData.auditRole==='compressor-forward-journal');
-  assert.equal(shaft.length,1,'The turbine core must be a single continuous revolved shaft');
+  assert.equal(shaft.length,2,'The turbine must have separate forward and aft wheel shafts');
+  const forwardShaft=shaft.filter(object=>object.userData.wheelShaft==='forward');
+  const aftShaft=shaft.filter(object=>object.userData.wheelShaft==='aft');
+  assert.equal(forwardShaft.length,1,'The forward wheel shaft is missing');
+  assert.equal(aftShaft.length,1,'The aft wheel shaft is missing');
   assert.equal(forwardJournal.length,1,'The front journal must remain part of the compressor rotor');
   const ray=new THREE.Raycaster(),position=new THREE.Vector3();
   const radiusCache=new Map();
@@ -26,9 +30,52 @@ export function verifyMechanics(model) {
     assert.ok(radius>.19,`Unexpected shaft constriction at X=${x}`);
     radiusCache.set(key,radius);return radius;
   }
-  for(const x of [.15,.64,1.10,1.565,1.80,2.16,2.52,2.88,3.35,4.08,5.59])shaftRadius(x);
+  for(const x of [.15,.64,1.10,1.565,1.80,3.35,4.08,5.59])shaftRadius(x);
   for(const [x,expected] of [[1.10,.23378],[4.08,.198105]])
     assert.ok(Math.abs(shaftRadius(x)-expected)<1e-5,`Source journal anchor changed at X=${x}`);
+
+  const forwardBounds=new THREE.Box3().setFromObject(forwardShaft[0]);
+  const aftBounds=new THREE.Box3().setFromObject(aftShaft[0]);
+  assert.ok(Math.abs(forwardBounds.max.x-1.84)<1e-6,'Forward shaft must meet the first wheel face');
+  assert.ok(Math.abs(aftBounds.min.x-3.20)<1e-6,'Aft shaft must meet the third wheel face');
+  for(const x of [1.9,2.16,2.52,2.88,3.1]) {
+    ray.set(new THREE.Vector3(x,1,0),new THREE.Vector3(0,-1,0));ray.near=0;ray.far=2;
+    assert.equal(ray.intersectObjects(shaft).length,0,`A shaft filler still crosses the wheel stack at X=${x}`);
+  }
+  for(const [objects,x,expected] of [[forwardShaft,.20,.11],[forwardShaft,1.10,.11],
+    [forwardShaft,1.70,.19],[forwardShaft,1.839,.239642857],[aftShaft,3.21,.24],
+    [aftShaft,3.38,.14],[aftShaft,3.55,.13]]) {
+    ray.set(new THREE.Vector3(x,0,0),new THREE.Vector3(0,1,0));ray.near=0;ray.far=1;
+    const hit=ray.intersectObjects(objects)[0];
+    assert.ok(hit&&Math.abs(hit.point.y-expected)<1e-5,`Wheel-shaft bore is filled or incorrectly shaped at X=${x}`);
+    assert.ok(shaftRadius(x)-hit.point.y>.07,`Wheel-shaft wall is pinched at X=${x}`);
+  }
+  const turbineCore=[...shaft,...meshes('turbine-spacers-studs',()=>true),
+    ...[1,2,3].flatMap(stage=>meshes(`turbine-wheel-${stage}`,()=>true))];
+  for(const offset of [[0,0],[.07,.035]]) {
+    ray.set(new THREE.Vector3(.145,...offset),new THREE.Vector3(1,0,0));ray.near=0;ray.far=5.7;
+    const hit=ray.intersectObjects(turbineCore)[0];
+    assert.ok(hit&&Math.abs(hit.point.x-3.62)<1e-5,
+      'The reconstructed rotor bore must reach an explicit aft-pocket floor without an intervening plug');
+  }
+  ray.set(new THREE.Vector3(3.64,0,0),new THREE.Vector3(0,1,0));ray.near=0;ray.far=1;
+  const aftSolid=ray.intersectObjects(aftShaft)[0];
+  assert.ok(aftSolid&&Math.abs(aftSolid.point.y-shaftRadius(3.64))<1e-5,
+    'The aft pocket must close before the solid rear journal, not form an arbitrary full-length tube');
+  for(const object of shaft) {
+    const flange=object.userData.studFlange;
+    assert.equal(flange.count,12,'Each wheel-shaft end flange must seat all twelve through-studs');
+    for(let i=0;i<12;i++) {
+      // Keep the neighboring-wall control away from circumferential facet seams.
+      for(const [offset,open] of [[0,true],[.12,false]]) {
+        const angle=i*Math.PI/6+Math.PI/12+offset;
+        ray.set(new THREE.Vector3(flange.seatX-.18,.475*Math.cos(angle),.475*Math.sin(angle)),new THREE.Vector3(1,0,0));
+        ray.near=0;ray.far=.36;
+        const hits=ray.intersectObject(object);
+        assert.equal(hits.length===0,open,`${object.userData.wheelShaft}: stud ${i+1} bore or neighboring flange material is incorrect`);
+      }
+    }
+  }
 
   const summary=[];
   for(const [number,x] of [[1,-4.85],[2,1.10],[3,4.08]]) {
@@ -107,5 +154,5 @@ export function verifyMechanics(model) {
   }
   assert.equal(role('base-frame','trunnion-seat').length,4,'The base needs four trunnion saddles');
   assert.equal(role('base-frame','base-column').length,4,'The saddles need four connected support columns');
-  console.log(`Mechanical interfaces: ${summary.join('; ')}; thrust faces 4 mm; oil bores open. All gaps illustrative.`);
+  console.log(`Mechanical interfaces: ${summary.join('; ')}; thrust faces 4 mm; oil bores open; separate wheel shafts and inferred rotor bore verified. All gaps illustrative; compressor feed unrecovered.`);
 }

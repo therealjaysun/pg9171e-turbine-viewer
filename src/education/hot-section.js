@@ -1,4 +1,12 @@
 const references = {
+  buckets: {
+    label: 'Sulzer: PG9171E-compatible bucket cooling specifications',
+    url: 'https://www.sulzer.com/-/media/files/services/spare-parts/brochures/ge_ms9001e_equivalentbuckets_en_e10255_5_2014_web.pdf?sc_lang=en',
+  },
+  family: {
+    label: 'GE Vernova: 9E family and four-stage 9E.04 distinction',
+    url: 'https://www.gevernova.com/gas-power/products/gas-turbines/9e',
+  },
   dln: {
     label: 'DOE / NETL: Lean premixed combustion and DLN1',
     url: 'https://netl.doe.gov/sites/default/files/gas-turbine-handbook/3-2-1-2.pdf',
@@ -41,6 +49,7 @@ const wheels = {
       'This row has unshrouded tips and an external thermal barrier coating. It differs from the interlocking tip shrouds on stages 2 and 3.',
       'Axial-entry, multiple-tang dovetails carry the bucket load into the wheel; shanks separate this attachment from the main hot-gas stream. The video describes D-key retention for this row.',
       'The engineering compromise is to keep the bucket cool and tip leakage small while accommodating changing rotor and casing dimensions during heating.',
+      'The airfoil is metal surrounding cooling passages, not an empty thin shell. This reconstruction uses eleven spanwise passages inspired by a PG9171E-compatible Sulzer replacement bucket; the original video does not establish that exact population. Passage sizes are estimated, a common collector stands in for individual root plenums, and internal turbulators are not reproduced.',
     ],
     watch: [
       'Cooling-passage obstruction can raise local metal temperature even when bulk operating conditions appear unchanged.',
@@ -58,6 +67,7 @@ const wheels = {
       'Interlocking tip shrouds damp bucket vibration. Their cutter teeth run beside stationary honeycomb to form a controlled tip seal.',
       'Unlike stage 1, this row combines internal cooling with tip shrouds. Axial-entry dovetails transfer load, while the video identifies twist locks as the axial retention arrangement.',
       'Tip shrouds improve sealing and vibration behavior but add rotating material at a large radius. This makes both aerodynamic performance and mechanical integrity relevant to their shape.',
+      'Six spanwise passages are based on a PG9171E-compatible replacement reference, not a recovered OEM drawing. Their placement, diameters and tip outlets are reconstructed; a common collector stands in for individual shank plenums. A section between the narrow passages can correctly look solid.',
     ],
     watch: [
       'Flow integrity matters across the whole bucket set; one restricted cooling path can overheat a single bucket.',
@@ -259,7 +269,7 @@ export function hotSectionEducation(part) {
 
   if (id.startsWith('turbine-wheel-')) {
     const stage = Number(id.split('-').at(-1));
-    return wheels[stage] ? lesson(part, wheels[stage], stage < 3 ? ['flow', 'life'] : ['life']) : null;
+    return wheels[stage] ? lesson(part, wheels[stage], stage < 3 ? ['buckets', 'family', 'life'] : ['family', 'life']) : null;
   }
 
   if (id.startsWith('turbine-nozzle-')) {
@@ -278,6 +288,7 @@ export function hotSectionEducation(part) {
       'Axial positioning must keep each wheel correctly related to its neighboring stationary nozzles as the assembled rotor heats and rotates.',
       'The clamped stack joins forward shaft, wheels, spacers and aft shaft into a common rotating assembly. Stud geometry and joint behavior cannot be assessed from this visual reconstruction.',
       'Cooling passages must reach the intended bucket and wheelspace regions while diaphragm seals limit unwanted interchange between those regions.',
+      'The wheel and spacer webs remain substantial metal around central openings, stud holes and radial cooling routes. The modeled passage envelopes illustrate this construction; they are not OEM bore contours or a validated compressor-to-bucket flow network.',
     ],
     watch: [
       'Fretting, corrosion and fatigue are possible rotor-life concerns even where surfaces are shielded from the main hot flow.',

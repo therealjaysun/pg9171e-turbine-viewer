@@ -15,14 +15,15 @@ const shaft = {
   design: [
     'Torsional strength and rotor dynamics matter together: a shaft must transmit torque while keeping bending and torsional vibration within acceptable limits.',
     'Couplings and bolted joints must preserve alignment and transfer load without unwanted slip. Rotor balance depends on the entire assembled train, not only individual wheels.',
-    'Axial thermal growth has to be accommodated without losing blade, seal or bearing clearances. The visible shaft is simplified; it is not a manufacturing definition of the rotor joints.'
+    'Axial thermal growth has to be accommodated without losing blade, seal or bearing clearances. The rotor uses separate forward and aft wheel shafts with three wheels and two spacers, not a solid bar passing through the complete turbine stack.',
+    'The forward axial opening and built-up construction follow the video. Internal shaft contours and cavity termination are reconstructed, not recovered OEM dimensions. Compressor extraction plumbing and the complete internal cooling circuit remain unresolved.'
   ],
   watch: [
     'Shaft vibration is interpreted with speed, load, phase and bearing information. A vibration change alone does not uniquely identify imbalance, misalignment or a rub.',
     'Turning gear and start-up procedures manage the thermal state of a real rotor. This visualization does not reproduce thermal bow or critical-speed behavior.',
     'Rotor inspection and life assessment use the installed unit\'s service history and OEM criteria; apparent model dimensions cannot establish fitness for service.'
   ],
-  references: [video(180), designReference]
+  references: [video(1826), video(1846), designReference, {label: 'GE Vernova: 9E family', url: 'https://www.gevernova.com/gas-power/products/gas-turbines/9e'}]
 };
 
 function bearingEducation(number) {

@@ -4,7 +4,8 @@ import {
   TAU, palette, material, part, mesh, lathe, ring, box, rod,
   bolts, bladeRow, splitCasing, hollowTube,
 } from './helpers.js';
-import {piercedSleeve, piercedPlate, hollowRod, cooledBladeRow, cooledNozzleRow, nozzleOuterPlatform} from './hot-channels.js';
+import {piercedSleeve, piercedPlate, hollowRod, cooledBladeRow, cooledNozzleRow, nozzleOuterPlatform,
+  bucketRootBand, cooledBucketTipShroud} from './hot-channels.js';
 import {subtractGeometry} from './csg.js';
 
 const CANT = 13 * Math.PI / 180;
@@ -27,6 +28,35 @@ function studBores(object, x0, x1) {
   const original = object.geometry;
   object.geometry = subtractGeometry(original, cutters);
   original.dispose(); cutters.forEach(g => g.dispose());
+}
+
+function wheelCoolingFeeds(object, x, collectorRadius) {
+  const paths = [], cutters = [];
+  for (let i = 0; i < 6; i++) {
+    const angle = i * TAU / 6, r0 = 0.22, r1 = collectorRadius;
+    const cutter = new THREE.CylinderGeometry(0.009, 0.009, r1 - r0, 16);
+    cutter.translate(x + 0.035, (r0 + r1) / 2, 0); cutter.rotateX(angle); cutters.push(cutter);
+    paths.push({angle, radius: 0.009, points: Array.from({length: 13}, (_, j) => radial(x + 0.035, r0 + (r1 - r0) * j / 12, angle))});
+  }
+  const original = object.geometry;
+  object.geometry = subtractGeometry(original, cutters);
+  original.dispose(); cutters.forEach(cutter => cutter.dispose());
+  return paths;
+}
+
+function spacerFaceChannels(object, center, rearFace) {
+  const paths = [], cutters = [];
+  for (const side of rearFace ? [-1, 1] : [-1]) for (let i = 0; i < 6; i++) {
+    const angle = i * TAU / 6, x = center + side * 0.096;
+    const cutter = new THREE.BoxGeometry(0.016, 0.46, 0.012);
+    cutter.translate(x, 0.43, 0); cutter.rotateX(angle); cutters.push(cutter);
+    paths.push({face: side < 0 ? 'forward' : 'aft', angle, width: 0.012,
+      points: Array.from({length: 9}, (_, j) => radial(x, 0.22 + j * 0.045, angle))});
+  }
+  const original = object.geometry;
+  object.geometry = subtractGeometry(original, cutters);
+  original.dispose(); cutters.forEach(cutter => cutter.dispose());
+  return paths;
 }
 
 function canFrame(parent, angle, x = -0.08, radius = 1.75) {
@@ -367,9 +397,9 @@ export function buildHotSection(ctx) {
     lug.rotation.x = angle;
     rod(transition, radial(1.49, 1.16, angle), radial(1.56, 1.24, angle), 0.03, mats.bolt, 6);
     lathe(transition, [[1.565, 0.752], [1.61, 0.752], [1.61, 0.768],
-      [1.565, 0.768], [1.565, 0.752]], mats.steel, 8, angle - Math.PI / 2 - TAU / 28, TAU / 14 - 0.018);
+      [1.565, 0.768], [1.565, 0.752]].reverse(), mats.steel, 8, angle - Math.PI / 2 - TAU / 28, TAU / 14 - 0.018);
     lathe(transition, [[1.565, 1.088], [1.61, 1.088], [1.61, 1.109],
-      [1.565, 1.109], [1.565, 1.088]], mats.steel, 8, angle - Math.PI / 2 - TAU / 28, TAU / 14 - 0.018);
+      [1.565, 1.109], [1.565, 1.088]].reverse(), mats.steel, 8, angle - Math.PI / 2 - TAU / 28, TAU / 14 - 0.018);
   }
 
   const services = part(ctx, {
@@ -422,13 +452,18 @@ export function buildHotSection(ctx) {
       [x - 0.10, root - 0.04], [x + 0.10, root - 0.04], [x + 0.10, 0.62],
       [x + 0.16, 0.42], [x + 0.16, 0.24], [x - 0.16, 0.24]], mats.dark, 80);
     studBores(wheelHub, x - 0.23, x + 0.23);
-    ring(rotor, x, root + 0.019, 0.215, 0.07, mats.turbine, 92);
+    const bucketParams = {root: root + 0.01, tip, chord: chords[stage],
+      twist: 0.59 - stage * 0.045, sweep: 0.028, thickness: 0.15, camber: 0.19, lean: 0.025,
+      coolingStage: stage + 1};
+    if (stage < 2) {
+      rotor.userData.coolingFeedPaths = wheelCoolingFeeds(wheelHub, x, root - 0.008);
+      bucketRootBand(rotor, x, 92, bucketParams, mats.turbine, 0.012);
+    } else ring(rotor, x, root + 0.019, 0.215, 0.07, mats.turbine, 92);
     const rotorBlades = stage < 2 ? cooledBladeRow : bladeRow;
-    rotorBlades(rotor, x, 92, {root: root + 0.01, tip, chord: chords[stage],
-      twist: 0.59 - stage * 0.045, sweep: 0.028, thickness: 0.15, camber: 0.19, lean: 0.025},
+    rotorBlades(rotor, x, 92, bucketParams,
     stage === 0 ? mats.coating : mats.turbine, 0.012);
-    bolts(rotor, x - 0.17, 0.475, 12, 0.045, mats.bolt, Math.PI / 12);
-    if (stage > 0) {
+    if (stage === 1) cooledBucketTipShroud(rotor, x, 92, bucketParams, mats.turbine, 0.012);
+    if (stage === 2) {
       turbineShroud(rotor, x + 0.02, tip + 0.014, chords[stage] * 0.91, 92, mats.turbine);
       ring(rotor, x - 0.035, tip + 0.04, 0.014, 0.032, mats.steel, 92);
       ring(rotor, x + 0.065, tip + 0.04, 0.014, 0.032, mats.steel, 92);
@@ -441,7 +476,9 @@ export function buildHotSection(ctx) {
     rotors.push(rotor);
     rotor.userData.clearances = {airfoilTip: tip, tipSealOuterRadius: stage ? tip + 0.04 : tip,
       stationaryShroudInnerRadius: stage ? tip + 0.048 : tip + 0.012};
-    rotor.userData.channels = {coolingPassagesPerBucket: stage < 2 ? 3 : 0, topology: 'Representative spanwise passages, not OEM drill pattern'};
+    rotor.userData.channels = {coolingPassagesPerBucket: [11, 6, 0][stage],
+      centralBoreRadius: 0.24, radialWheelFeeds: stage < 2 ? 6 : 0,
+      topology: 'Replacement-reference hole counts; inferred spanwise paths and common root collector instead of individual OEM plenums'};
 
     const nozzle = part(ctx, {
       id: `turbine-nozzle-${stage + 1}`, name: `Nozzle stage ${stage + 1} / ${vaneCounts[stage]} vanes`,
@@ -452,11 +489,14 @@ export function buildHotSection(ctx) {
       explode: [stage * 0.66 + 0.08, 0.72, 0],
     });
     const nozzleX = x - [0.290, 0.315, 0.330][stage];
-    const nozzleBlades = stage < 2 ? cooledNozzleRow : bladeRow;
     const nozzleParams = {root: root + 0.006, tip: tip + 0.026,
       chord: stage === 0 ? 0.245 : 0.29, twist: -0.59, sweep: 0.10, thickness: 0.12,
       camber: -0.18, lean: -0.024};
-    nozzleBlades(nozzle, nozzleX, vaneCounts[stage], nozzleParams, stage === 0 ? mats.coating : mats.stator);
+    // Only the first-row Boolean mesh has the 20-micrometre numerical fin.
+    // Keep the second row's stable 10-micrometre cleanup to avoid new slivers.
+    if (stage < 2) cooledNozzleRow(nozzle, nozzleX, vaneCounts[stage], nozzleParams,
+      stage === 0 ? mats.coating : mats.stator, stage === 0 ? 0.00002 : 0.00001);
+    else bladeRow(nozzle, nozzleX, vaneCounts[stage], nozzleParams, mats.stator);
     if (stage < 2) nozzleOuterPlatform(nozzle, nozzleX, nozzleParams, vaneCounts[stage], stage ? 16 : 18,
       mats.stator, mats.steel, stage === 0);
     else turbineShroud(nozzle, nozzleX, tip + 0.047, 0.24, 16, mats.stator);
@@ -474,22 +514,26 @@ export function buildHotSection(ctx) {
   const wheelSpacers = part(ctx, {
     id: 'turbine-spacers-studs', name: 'Wheel spacers and 12 through-studs',
     system: 'turbine', kind: 'rotor', sourceTime: 1821,
-    description: 'Two wheel spacers establish the spacing of three turbine wheels. Twelve through-studs clamp the turbine rotor assembly.',
+    description: 'Two bored wheel spacers establish the spacing of three turbine wheels. Radial spacer-face grooves communicate with the rotor cooling cavity; groove count and dimensions are inferred. Twelve through-studs and end nuts clamp the stack at its wheel-shaft flanges.',
     facts: [['Wheel spacers', '2'], ['Through-studs', '12']], explode: [0.55, -0.6, 0],
   });
+  wheelSpacers.userData.coolingFacePaths = [];
   for (const x of [2.26, 2.78]) {
-    const spacer = lathe(wheelSpacers, [[x - 0.10, 0.26], [x - 0.10, 0.42], [x - 0.065, 0.61],
-      [x + 0.065, 0.61], [x + 0.10, 0.42], [x + 0.10, 0.26], [x - 0.10, 0.26]], mats.dark, 64);
+    const spacer = lathe(wheelSpacers, [[x - 0.10, 0.24], [x - 0.10, 0.42], [x - 0.065, 0.61],
+      [x + 0.065, 0.61], [x + 0.10, 0.42], [x + 0.10, 0.24], [x - 0.10, 0.24]], mats.dark, 64);
     studBores(spacer, x - 0.17, x + 0.17);
+    wheelSpacers.userData.coolingFacePaths.push(...spacerFaceChannels(spacer, x, x === 2.26));
     for (let k = 0; k < 4; k++) ring(wheelSpacers, x - 0.043 + k * 0.026, 0.629, 0.011, 0.03, mats.steel, 64);
   }
   for (let i = 0; i < 12; i++) rod(wheelSpacers,
-    radial(1.69, 0.475, i * TAU / 12 + Math.PI / 12),
-    radial(3.27, 0.475, i * TAU / 12 + Math.PI / 12), 0.027, mats.steel);
+    radial(1.645, 0.475, i * TAU / 12 + Math.PI / 12),
+    radial(3.315, 0.475, i * TAU / 12 + Math.PI / 12), 0.027, mats.steel);
+  for (const x of [1.66975, 3.29025]) bolts(wheelSpacers, x, 0.475, 12, 0.045, mats.bolt, Math.PI / 12);
   rotors.push(wheelSpacers);
   wheelSpacers.userData.clearances = {spacerSealOuterRadius: 0.629, diaphragmToothInnerRadius: 0.637,
     radialSealGap: 0.008, throughStudRadius: 0.027, studBoreRadius: 0.030,
-    spacerCenters: [2.26, 2.78], spacerAxialHalfLength: 0.10, wheelAxialHalfLength: 0.16};
+    spacerCenters: [2.26, 2.78], spacerAxialHalfLength: 0.10, wheelAxialHalfLength: 0.16,
+    centralBoreRadius: 0.24, endNutCenters: [1.66975, 3.29025], endNutHalfWidth: 0.02025};
 
   for (const half of ['upper', 'lower']) {
     const casing = part(ctx, {
@@ -575,8 +619,8 @@ export function buildHotSection(ctx) {
       explode: [2.0, half === 'upper' ? 1.5 : -0.65, 0],
     });
     const shell = splitCasing(exhaustShell, [[3.35, 1.52], [3.35, 1.61], [4.28, 1.81],
-      [4.60, 1.94], [4.80, 2.13], [4.90, 2.38], [4.82, 2.38],
-      [4.73, 2.16], [4.55, 2.00], [4.24, 1.73], [3.35, 1.52]], mats.exhaust, {half});
+      [4.55, 1.94], [4.72, 2.13], [4.82, 2.38], [4.90, 2.38],
+      [4.797, 2.10], [4.60, 1.87], [4.30, 1.726], [3.35, 1.52]], mats.exhaust, {half});
     const sockets = [];
     for (let i = 0; i < 4; i++) {
       const a = Math.PI / 4 + i * TAU / 4;
@@ -608,7 +652,7 @@ export function buildHotSection(ctx) {
       [x + 0.43, radius + 0.17], [x + 0.455, radius + 0.33],
       [x + 0.426, radius + 0.33], [x + 0.40, radius + 0.18],
       [x + 0.32, radius + 0.09], [x + 0.18, radius + 0.035],
-      [x, radius + 0.028], [x, radius]], mats.steel, 96);
+      [x, radius + 0.028], [x, radius]].reverse(), mats.steel, 96);
   }
   turning.userData.clearances = {turningRings: 5, axialStagger: -0.11, radialPitch: 0.225,
     centerTunnelRadius: 0.69, outletRadii: [1.02, 1.245, 1.47, 1.695, 1.92]};

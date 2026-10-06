@@ -101,15 +101,18 @@ export function hollowRod(parent, from, to, outerRadius, innerRadius, mat, segme
 export function hollowTube(parent, points, outerRadius, wallThickness, mat, segments=32) {
   const innerRadius=outerRadius-wallThickness;
   if(innerRadius<=0 || wallThickness<=0)throw new Error('A hollow tube requires positive bore and wall thickness.');
-  const curve=new THREE.CatmullRomCurve3(points.map(point=>new THREE.Vector3(...point)));
-  const radialSegments=12,outer=new THREE.TubeGeometry(curve,segments,outerRadius,radialSegments,false);
-  const inner=new THREE.TubeGeometry(curve,segments,innerRadius,radialSegments,false);
+  const controls=points.map(point=>new THREE.Vector3(...point));
+  const closed=controls.length>3 && controls[0].distanceToSquared(controls.at(-1))<1e-16;
+  if(closed)controls.pop();
+  const curve=new THREE.CatmullRomCurve3(controls,closed);
+  const radialSegments=12,outer=new THREE.TubeGeometry(curve,segments,outerRadius,radialSegments,closed);
+  const inner=new THREE.TubeGeometry(curve,segments,innerRadius,radialSegments,closed);
   const positions=[...outer.attributes.position.array,...inner.attributes.position.array];
   const normals=[...outer.attributes.normal.array,...inner.attributes.normal.array].map((n,i)=>i>=outer.attributes.normal.array.length?-n:n);
   const uvs=[...outer.attributes.uv.array,...inner.attributes.uv.array],indices=[...outer.index.array],offset=outer.attributes.position.count;
   for(let i=0;i<inner.index.count;i+=3)indices.push(offset+inner.index.array[i],offset+inner.index.array[i+2],offset+inner.index.array[i+1]);
   // Annular lips join the two skins without closing the fluid passage.
-  for(const end of [0,segments]) {
+  for(const end of closed?[]:[0,segments]) {
     const firstVertex=positions.length/3,normal=curve.getTangentAt(end/segments).multiplyScalar(end?1:-1);
     for(const geometry of [outer,inner])for(let j=0;j<=radialSegments;j++) {
       const index=end*(radialSegments+1)+j;
@@ -127,7 +130,7 @@ export function hollowTube(parent, points, outerRadius, wallThickness, mat, segm
   }
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geometry.setIndex(indices);
   outer.dispose();inner.dispose();
-  const object=mesh(parent,geometry,mat);object.userData.channel={type:'curved',innerRadius,outerRadius,length:curve.getLength()};return object;
+  const object=mesh(parent,geometry,mat);object.userData.channel={type:'curved',innerRadius,outerRadius,length:curve.getLength(),closed};return object;
 }
 
 export function rod(parent, from, to, radius, mat, segments=12) {

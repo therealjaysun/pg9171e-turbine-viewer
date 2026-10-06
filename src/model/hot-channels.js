@@ -69,7 +69,17 @@ export function piercedSleeve(parent, {x0, x1, radius, thickness, holes = [], ma
     path.absellipse(hole.x, arc, hole.bore, hole.bore, 0, TAU, true);
     shape.holes.push(path);
   }
-  const geometry = refineCircumference(new THREE.ExtrudeGeometry(shape, {depth: thickness, bevelEnabled: false, curveSegments: 10}), radius * 0.16);
+  const developed = new THREE.ExtrudeGeometry(shape, {depth: thickness, bevelEnabled: false, curveSegments: 10});
+  const developedPositions = developed.getAttribute('position'), indices = [], circumference = TAU * radius;
+  // Rolling joins the two developed edges; their original sidewalls would become
+  // coincident internal faces, not part of the material's boundary.
+  for (let i = 0; i < developedPositions.count; i += 3) {
+    const ys = [0, 1, 2].map(j => developedPositions.getY(i + j));
+    if (ys.every(y => Math.abs(y) < 1e-6) || ys.every(y => Math.abs(y - circumference) < 1e-6)) continue;
+    indices.push(i, i + 1, i + 2);
+  }
+  developed.setIndex(indices);
+  const geometry = refineCircumference(developed, radius * 0.16);
   const p = geometry.getAttribute('position');
   for (let i = 0; i < p.count; i++) {
     const angle = p.getY(i) / radius + seam, r = radius - p.getZ(i);
@@ -91,9 +101,9 @@ function airfoilPoint(params, u, fraction) {
 }
 
 function coolingBore(params, u, radius) {
-  const n = 12, spans = 18, positions = [], indices = [];
+  const n = 12, spans = 28, positions = [], indices = [];
   for (let j = 0; j <= spans; j++) {
-    const f = -0.025 + j / spans * 1.05;
+    const f = -0.20 + j / spans * 1.34;
     const p = airfoilPoint(params, u, f);
     for (let k = 0; k < n; k++) positions.push(p[0] + radius * Math.cos(k * TAU / n), p[1], p[2] + radius * Math.sin(k * TAU / n));
   }
@@ -102,7 +112,7 @@ function coolingBore(params, u, radius) {
     indices.push(a, b + n, b, a, a + n, b + n);
   }
   for (const j of [0, spans]) {
-    const p = airfoilPoint(params, u, -0.025 + j / spans * 1.05), center = positions.length / 3;
+    const p = airfoilPoint(params, u, -0.20 + j / spans * 1.34), center = positions.length / 3;
     positions.push(...p);
     for (let k = 0; k < n; k++) {
       const a = j * n + k, b = j * n + (k + 1) % n;
@@ -115,22 +125,75 @@ function coolingBore(params, u, radius) {
   return result;
 }
 
+export function bucketCoolingPattern(stage) {
+  // Counts follow the identified Sulzer PG9171E-compatible replacement design.
+  // Bore diameters and locations are inferred, not that supplier's drawing.
+  const us = stage === 1 ? Array.from({length: 11}, (_, i) => 0.10 + i * 0.07)
+    : stage === 2 ? [0.14, 0.27, 0.40, 0.53, 0.66, 0.79] : [];
+  return us.map(u => ({u, radius: stage === 1 ? 0.00165 : 0.0020}));
+}
+
 export function cooledBladeRow(parent, x, count, params, material, phase = 0) {
   const original = bladeGeometry(params);
-  const cutters = [0.25, 0.50, 0.72].map(u => coolingBore(params, u, 0.0028));
-  const geometry = subtractGeometry(original, cutters);
+  const pattern = bucketCoolingPattern(params.coolingStage);
+  const cutters = pattern.map(({u, radius}) => coolingBore(params, u, radius));
+  const geometry = stabilizeNozzleCsg(subtractGeometry(original, cutters), 0.00001);
   original.dispose(); cutters.forEach(c => c.dispose());
-  geometry.userData = {csg: true, coolingPassages: 3, passageRadius: 0.0028, illustrative: true,
-    coolingPaths: [0.25, 0.50, 0.72].map(u => ({radius: 0.0028,
-      points: [0, 0.25, 0.50, 0.75, 1].map(f => airfoilPoint(params, u, f))}))};
-  const result = new THREE.InstancedMesh(geometry, material, count);
-  result.userData = {csgAirfoil: true, coolingPassages: 3};
-  const dummy = new THREE.Object3D();
-  for (let i = 0; i < count; i++) {
-    dummy.position.set(x, 0, 0); dummy.rotation.set(phase + i * TAU / count, 0, 0); dummy.updateMatrix(); result.setMatrixAt(i, dummy.matrix);
-  }
-  result.castShadow = true; result.receiveShadow = true; parent.add(result);
+  geometry.userData = {csg: true, coolingPassages: pattern.length, illustrative: true,
+    coolingReference: 'Sulzer E10255 PG9171E-compatible replacement buckets; not exact video/OEM drill pattern',
+    coolingPaths: pattern.map(({u, radius}) => ({u, radius,
+      points: [0, 0.25, 0.50, 0.75, 1].map(f => airfoilPoint(params, u, f)),
+      wallPoints: [0, 0.25, 0.50, 0.75, 1].map(f => {
+        const point = airfoilPoint(params, u, f), angle = params.twist * (1 - 0.48 * f);
+        return [point[0] - Math.sin(angle) * radius * 1.65, point[1], point[2] + Math.cos(angle) * radius * 1.65];
+      }),
+      assembledPoints: [-0.05, -0.015, 0, 0.01, 0.25, 0.50, 0.75, 1,
+        ...(params.coolingStage === 2 ? [1.015, 1.035, 1.055, 1.075, 1.09] : [1.01])].map(f => airfoilPoint(params, u, f))})),
+  };
+  const result = radialInstances(parent, geometry, material, x, count, phase);
+  result.userData = {csgAirfoil: true, coolingPassages: pattern.length};
   return result;
+}
+
+function piercedBucketBand(parent, x, count, params, profile, material, phase, role) {
+  const pitch = TAU / count, holder = new THREE.Group();
+  const base = lathe(holder, profile, material, 4, -Math.PI / 2 - pitch / 2, pitch);
+  base.geometry.computeBoundingBox();
+  const cutters = [];
+  for (const offset of [-2, -1, 0, 1, 2]) for (const {u, radius} of bucketCoolingPattern(params.coolingStage)) {
+    const cutter = coolingBore(params, u, radius).rotateX(offset * pitch);
+    cutter.computeBoundingBox();
+    if (cutter.boundingBox.intersectsBox(base.geometry.boundingBox)) cutters.push(cutter);
+    else cutter.dispose();
+  }
+  const geometry = stabilizeNozzleCsg(subtractGeometry(base.geometry, cutters), 0.00001);
+  base.geometry.dispose(); cutters.forEach(cutter => cutter.dispose());
+  geometry.userData = {csg: true, illustrative: true, bucketBand: role, coolingStage: params.coolingStage};
+  return radialInstances(parent, geometry, material, x, count, phase);
+}
+
+export function bucketRootBand(parent, x, count, params, material, phase = 0) {
+  const inner = params.root - 0.061, outer = params.root + 0.009;
+  const low = params.root - 0.040, high = params.root - 0.013;
+  // A sectioned collector and inward-open feed replace the formerly solid rim.
+  // This common gallery is a simplified equivalent of individual root plenums.
+  const profile = [[-0.1075, inner], [-0.1075, outer], [0.1075, outer], [0.1075, inner],
+    [0.047, inner], [0.047, low], [0.09, low], [0.09, high], [-0.09, high],
+    [-0.09, low], [0.023, low], [0.023, inner], [-0.1075, inner]];
+  const row = piercedBucketBand(parent, x, count, params, profile, material, phase, 'root-collector');
+  row.geometry.userData.rootCollector = {inner, outer, low, high, feedX: 0.035,
+    inferredGeometry: true, individualBucketPlenumsSimplified: true};
+  return row;
+}
+
+export function cooledBucketTipShroud(parent, x, count, params, material, phase = 0) {
+  const outer = params.tip + 0.032, inner = params.tip - 0.011, half = params.chord * 0.91 / 2;
+  piercedBucketBand(parent, x, count, params, [[0.02 - half, inner], [0.02 - half, outer],
+    [0.02 + half, outer], [0.02 + half, inner], [0.02 - half, inner]], material, phase, 'tip-shroud');
+  for (const center of [-0.035, 0.065]) piercedBucketBand(parent, x, count, params,
+    [[center - 0.007, params.tip + 0.008], [center - 0.007, params.tip + 0.04],
+      [center + 0.007, params.tip + 0.04], [center + 0.007, params.tip + 0.008],
+      [center - 0.007, params.tip + 0.008]], material, phase, 'tip-seal');
 }
 
 function nozzleCavity(params) {
@@ -198,7 +261,7 @@ function radialInstances(parent, geometry, material, x, count, phase = 0) {
   result.castShadow = true; result.receiveShadow = true; parent.add(result); return result;
 }
 
-function stabilizeNozzleCsg(source) {
+function stabilizeNozzleCsg(source, minimumEdge) {
   // Collapse micron-scale CSG intersection edges before Float32 millimetre export.
   // Neighbor faces share the replacement vertex; this does not punch out slivers.
   const positionsOnly = source.clone(); positionsOnly.deleteAttribute('normal');
@@ -209,16 +272,24 @@ function stabilizeNozzleCsg(source) {
     const ids = [0, 1, 2].map(j => geometry.index.getX(i + j));
     for (let j = 0; j < 3; j++) {
       const a = ids[j], b = ids[(j + 1) % 3];
-      if (Math.hypot(p.getX(a) - p.getX(b), p.getY(a) - p.getY(b), p.getZ(a) - p.getZ(b)) < 0.00001) parents[root(b)] = root(a);
+      if (Math.hypot(p.getX(a) - p.getX(b), p.getY(a) - p.getY(b), p.getZ(a) - p.getZ(b)) < minimumEdge) parents[root(b)] = root(a);
     }
   }
-  const indices = [], a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  const indices = [], faces = new Map(), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   for (let i = 0; i < geometry.index.count; i += 3) {
     const ids = [0, 1, 2].map(j => root(geometry.index.getX(i + j)));
     if (new Set(ids).size < 3) continue;
     a.fromBufferAttribute(p, ids[0]); b.fromBufferAttribute(p, ids[1]); c.fromBufferAttribute(p, ids[2]);
-    if (b.sub(a).cross(c.sub(a)).lengthSq() > 1e-22) indices.push(...ids);
+    if (b.sub(a).cross(c.sub(a)).lengthSq() <= 1e-22) continue;
+    const sorted = [...ids].sort((a,b)=>a-b), key = sorted.join(':');
+    const orientation = ids.indexOf(sorted[1]) === (ids.indexOf(sorted[0])+1)%3 ? 1 : -1;
+    const prior = faces.get(key);
+    // Edge collapse can leave an opposed pair forming a zero-thickness fin.
+    if (prior) {
+      if (prior.orientation !== orientation) faces.delete(key);
+    } else faces.set(key,{ids,orientation});
   }
+  for (const {ids} of faces.values()) indices.push(...ids);
   geometry.setIndex(indices); geometry.computeVertexNormals();
   const compact = geometry.toNonIndexed();
   geometry.dispose(); source.dispose(); return compact;
@@ -226,12 +297,12 @@ function stabilizeNozzleCsg(source) {
 
 // The video shows hollow nozzle partitions and trailing-edge exits, unlike bucket bores.
 // Wall thickness, internal cavity contour and the 11-hole count are illustrative.
-export function cooledNozzleRow(parent, x, count, params, material) {
+export function cooledNozzleRow(parent, x, count, params, material, minimumEdge = 0.00001) {
   const original = bladeGeometry(params), cavity = nozzleCavity(params);
   const ports = Array.from({length: 11}, (_, i) => cappedPort(params, 0.10 + i * 0.08, 0.0017));
-  const geometry = stabilizeNozzleCsg(subtractGeometry(original, [cavity, ...ports.map(port => port.geometry)]));
+  const geometry = stabilizeNozzleCsg(subtractGeometry(original, [cavity, ...ports.map(port => port.geometry)]), minimumEdge);
   original.dispose(); cavity.dispose(); ports.forEach(port => port.geometry.dispose());
-  geometry.userData = {airfoil: true, csg: true, illustrative: true, nozzleCavity: true,
+  geometry.userData = {airfoil: true, csg: true, illustrative: true, nozzleCavity: true, minimumEdge,
     cavitySamples: [0.25, 0.50, 0.75].map(f => {
       const center = airfoilPoint(params, 0.4, f), c = params.chord * (1 - 0.3 * f), angle = params.twist * (1 - 0.48 * f);
       const u = 0.4, half = 5 * params.thickness * c * (0.2969 * Math.sqrt(u) - 0.126 * u - 0.3516 * u ** 2 + 0.2843 * u ** 3 - 0.1036 * u ** 4);

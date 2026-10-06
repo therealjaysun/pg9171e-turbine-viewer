@@ -18,8 +18,20 @@ export const systems = [
 // Source journal diameters are scale anchors. All running gaps are enlarged,
 // educational geometry, not clearances for assembly or service work.
 export const mechanicsDimensions = {
-  shaftProfile: [[.14,.22],[.22,.22],[.30,.23378],[1.58,.23378],[1.64,.24],
-    [3.23,.24],[3.38,.22],[3.70,.198105],[5.60,.198105],[5.60,.43],[5.80,.43]],
+  wheelShafts: {
+    forward: {
+      outer: [[.14,.22],[.22,.22],[.30,.23378],[1.58,.23378],[1.69,.36],
+        [1.69,.54],[1.77,.54],[1.84,.42]],
+      bore: [[.14,.11],[1.42,.11],[1.58,.135],[1.70,.19],[1.84,.24]],
+      blind: false, studSeat: 1.69,
+    },
+    aft: {
+      outer: [[3.20,.42],[3.22,.54],[3.27,.54],[3.27,.36],[3.38,.22],
+        [3.70,.198105],[5.60,.198105],[5.60,.43],[5.80,.43]],
+      bore: [[3.20,.24],[3.27,.24],[3.38,.14],[3.55,.13],[3.62,.095]],
+      blind: true, studSeat: 3.27,
+    },
+  },
   bearings: [
     {number:1,x:-4.85,radius:.2,length:.267,start:-5.44,end:-4.555,housingRadius:.438},
     {number:2,x:1.10,radius:.23378,length:.39852,start:.64,end:1.565,housingRadius:.438},
@@ -214,12 +226,33 @@ function tiltingJournal(parent,station,mat,steel) {
 function buildBearings(ctx) {
   const steel=material(palette.steel),housing=material(palette.casing,.5,.48),
     babbitt=material(0xc7c3ad,.68,.36),bolt=material(palette.bolt);
-  const shaft=part(ctx,{id:'shaft',name:'Connecting shaft & hot-end coupling',system:'bearings',kind:'rotor',explode:[0,0,0],sourceTime:1821,
-    description:'Continuous compressor-to-turbine connection, forward turbine journal, wheel-bore core and aft load shaft. Smooth journals pass through stationary bearing seals; the output coupling is at the hot exhaust end. The core and rotor interfaces are reconstructed, not OEM joint details.',
-    facts:[['Configuration','Single shaft'],['Operating speed','3,000 rpm'],['Drive','Hot end'],['Journal anchors','467.56 / 396.21 mm diameter']]});
-  const profile=mechanicsDimensions.shaftProfile;
-  named(lathe(shaft,[[profile[0][0],0],...profile,[profile.at(-1)[0],0]],steel),
-    'Continuous turbine rotor core and smooth journals','rotor-shaft');
+  const shaft=part(ctx,{id:'shaft',name:'Forward & aft wheel shafts / hot-end coupling',system:'bearings',kind:'rotor',explode:[0,0,0],sourceTime:1821,
+    description:'Separate forward and aft wheel shafts meet the through-bolted three-wheel rotor stack. The forward shaft has an internal cooling-air bore; the aft hub has an inferred blind pocket that closes before the rear bearing journal. Bore contours, pocket termination and mating flanges are educational estimates, not OEM dimensions. The compressor-side feed is not recovered, so this is not a verified complete cooling circuit.',
+    facts:[['Configuration','Built-up, single-shaft rotor'],['Operating speed','3,000 rpm'],['Drive','Hot end'],['Journal anchors','467.56 / 396.21 mm diameter'],['Internal contours','Inferred / partial cooling route']]});
+  for(const [end,dimensions] of Object.entries(mechanicsDimensions.wheelShafts)) {
+    const {outer,bore,blind}=dimensions;
+    // A blind hub pocket has a real floor; the forward bore has two open mouths.
+    const floor=blind?[[outer.at(-1)[0],0],[bore.at(-1)[0],0]]:[];
+    const profile=[...outer,...floor,...[...bore].reverse(),outer[0]];
+    const mesh=named(lathe(shaft,profile,steel),end==='forward'?'Forward wheel shaft with cooling bore':'Aft wheel shaft with blind hub pocket','rotor-shaft');
+    const cutters=Array.from({length:12},(_,i)=>{
+      const angle=i*TAU/12+Math.PI/12;
+      const cutter=new THREE.CylinderGeometry(.030,.030,.34,16);
+      cutter.rotateZ(-Math.PI/2);
+      cutter.translate(dimensions.studSeat,.475*Math.cos(angle),.475*Math.sin(angle));
+      return cutter;
+    });
+    const cuts=mergeGeometries(cutters,false),original=mesh.geometry;
+    mesh.geometry=subtractGeometry(original,[cuts]);
+    original.dispose();cuts.dispose();for(const cutter of cutters)cutter.dispose();
+    mesh.userData.wheelShaft=end;
+    mesh.userData.studFlange={seatX:dimensions.studSeat,outerRadius:.54,
+      boltCircleRadius:.475,boreRadius:.030,count:12,phase:Math.PI/12};
+    mesh.userData.channels={type:blind?'blind-hub-pocket':'axial-cooling-bore',
+      boreProfile:bore.map(point=>[...point]),blindFloor:blind?bore.at(-1)[0]:null,
+      sourceBasis:'Built-up rotor and internal cooling architecture from the training video and GE guide; all internal dimensions and aft closure inferred.',
+      inletBoundary:end==='forward'?'Compressor-side feed not recovered':'Third-wheel central bore'};
+  }
   bolts(shaft,5.817,.35,16,.026,bolt);
   for(const station of mechanicsDimensions.bearings) {
     const {number,x,radius}=station;
