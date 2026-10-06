@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1e2928" />
+    <meta name="description" content="Interactive PG9171E Frame 9E gas turbine reconstruction with CAD, section and exploded views." />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23233430'/%3E%3Cpath d='M5 12h22v8H5zM10 7v18M16 5v22M22 8v16' stroke='%239bc6b3' stroke-width='2'/%3E%3C/svg%3E" />
+    <title>PG9171E | Turbine Assembly</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="app-header">
+        <button class="icon-btn mobile-menu" id="menu-toggle" aria-label="Toggle assembly panel" title="Assembly panel"><i data-lucide="panel-left"></i></button>
+        <div class="brand-mark" aria-hidden="true"><i data-lucide="box"></i></div>
+        <div class="machine-title"><h1>PG9171E <span>GE Frame 9E</span></h1><div>GAS TURBINE <span class="divider">/</span> DLN1 CONFIGURATION</div></div>
+        <div class="header-specs"><span><b>17</b> compressor stages</span><span><b>14</b> combustors</span><span><b>3</b> turbine stages</span></div>
+        <div class="header-actions"><button class="text-btn" id="learning-toggle" title="Show part guide" aria-label="Show part guide" aria-controls="learning-panel" aria-expanded="false"><i data-lucide="graduation-cap"></i><span>Part guide</span></button><button class="text-btn" id="reference-open" title="References and reconstruction limits"><i data-lucide="book-open"></i><span>References</span></button><button class="primary-btn" id="export-open"><i data-lucide="download"></i><span>Export CAD</span></button></div>
+      </header>
+      <div class="workspace">
+        <aside class="assembly-panel" id="assembly-panel">
+          <div class="panel-heading"><h2>Assembly</h2><span id="part-count" class="mono">BUILDING</span></div>
+          <div class="assembly-root"><i data-lucide="boxes"></i><span>PG9171E</span><span class="revision">R01</span></div>
+          <div id="assembly-tree" class="assembly-tree"></div>
+          <section class="display-section">
+            <div class="section-heading"><h2>Display</h2><button class="icon-btn" id="show-all" aria-label="Show all components" title="Show all components"><i data-lucide="eye"></i></button></div>
+            <label class="switch-row"><span>Outer casings</span><input id="casings" type="checkbox" checked role="switch" /></label>
+            <label class="switch-row"><span>Rotating assembly</span><input id="rotors" type="checkbox" checked role="switch" /></label>
+            <label class="switch-row"><span>Base &amp; supports</span><input id="supports" type="checkbox" checked role="switch" /></label>
+            <label class="switch-row"><span>Part labels</span><input id="labels" type="checkbox" checked role="switch" /></label>
+            <label class="switch-row"><span>Flow paths</span><input id="flow" type="checkbox" role="switch" /></label>
+          </section>
+          <section class="inspector" id="inspector">
+            <div class="section-heading"><h2>Model information</h2></div>
+            <h3>Single-shaft industrial turbine</h3>
+            <p>Reverse-flow combustion, hot-end drive and three main bearings.</p>
+            <dl><div><dt>Nominal shaft speed</dt><dd>3,000 rpm</dd></div><div><dt>Compressor tip diameter</dt><dd>2,161.5 mm</dd></div><div><dt>Geometry</dt><dd>Reconstructed</dd></div></dl>
+          </section>
+          <div class="panel-footer"><span class="evidence-dot"></span>Reference-based reconstruction</div>
+        </aside>
+        <main class="viewport" id="viewport">
+          <div class="view-toolbar">
+            <div class="segmented" aria-label="Assembly view"><button data-view="assembled">Assembled</button><button data-view="section" class="active" aria-pressed="true">Section</button><button data-view="exploded">Exploded</button></div>
+            <div class="toolbar-right"><select id="render-style" aria-label="Rendering style"><option value="shaded">Shaded</option><option value="cad">CAD edges</option><option value="xray">X-ray</option><option value="wire">Wireframe</option></select><button class="icon-btn" id="projection" title="Orthographic projection" aria-label="Orthographic projection" aria-pressed="false"><i data-lucide="box"></i></button></div>
+          </div>
+          <div id="canvas-container"></div>
+          <div id="label-layer" aria-hidden="true"></div>
+          <div class="viewport-heading"><span id="view-code" class="mono">SECTION A-A</span><h2 id="view-title">The complete flow path</h2><span class="view-subtitle" id="view-subtitle">Longitudinal section</span></div>
+          <div class="view-tools" aria-label="Camera controls"><button class="icon-btn" id="fit-view" aria-label="Fit assembly" title="Fit assembly"><i data-lucide="scan"></i></button><button class="icon-btn" id="reset-view" aria-label="Reset view" title="Reset view"><i data-lucide="rotate-ccw"></i></button><span class="tool-divider"></span><button class="icon-btn" data-camera="iso" aria-label="Isometric view" title="Isometric view"><i data-lucide="box"></i></button><button class="icon-btn" data-camera="side" aria-label="Side view" title="Side view"><i data-lucide="panel-top"></i></button><button class="icon-btn" data-camera="top" aria-label="Top view" title="Top view"><i data-lucide="square"></i></button><button class="icon-btn" data-camera="end" aria-label="Inlet view" title="Inlet view"><i data-lucide="circle-dot"></i></button><span class="tool-divider"></span><button class="icon-btn" id="screenshot" aria-label="Save image" title="Save image"><i data-lucide="camera"></i></button><button class="icon-btn" id="fullscreen" aria-label="Full screen" title="Full screen"><i data-lucide="maximize"></i></button></div>
+          <div id="selection-tag" hidden><span></span><button class="icon-btn" id="clear-selection" title="Clear selection" aria-label="Clear selection"><i data-lucide="x"></i></button></div>
+          <div class="axis-widget" aria-hidden="true"><span class="axis-x">X</span><span class="axis-y">Y</span><span class="axis-z">Z</span><svg viewBox="0 0 72 72"><path d="M34 40L60 47" stroke="#9e4d44"/><path d="M34 40L34 12" stroke="#528468"/><path d="M34 40L12 54" stroke="#4f7b9b"/></svg></div>
+          <div class="view-bottom">
+            <div class="section-controls" id="section-controls"><i data-lucide="slice"></i><label for="section-axis">Section</label><select id="section-axis"><option value="z">Longitudinal</option><option value="y">Horizontal</option><option value="x">Transverse</option></select><input id="section-position" aria-label="Section position" type="range" min="-100" max="100" value="0"/><output id="section-value" class="mono">0%</output><button id="section-flip" class="icon-btn" aria-label="Reverse section" title="Reverse section"><i data-lucide="flip-horizontal-2"></i></button></div>
+            <div class="explode-controls" id="explode-controls" hidden><i data-lucide="expand"></i><label for="explode-amount">Separation</label><input id="explode-amount" aria-label="Explosion separation" type="range" min="0" max="100" value="60"/><output id="explode-value" class="mono">60%</output><button class="icon-btn" id="explode-play" aria-label="Animate assembly" title="Animate assembly"><i data-lucide="play"></i></button></div>
+            <div class="motion-controls"><button class="icon-btn" id="rotate-play" aria-label="Animate rotor" title="Animate rotor at inspection speed" aria-pressed="false"><i data-lucide="play"></i></button><span id="motion-label">Rotor stopped</span></div>
+          </div>
+          <div id="loading" role="status"><div class="loading-wheel"></div><span>Building turbine geometry</span></div>
+          <div id="toast" role="status" hidden></div>
+          <footer class="viewport-footer"><span id="selection-status">PG9171E / COMPLETE ASSEMBLY</span><span id="mesh-status" class="mono"></span><span class="scale-note">METRES <span>/</span> ESTIMATED ENVELOPE</span></footer>
+        </main>
+        <aside class="learning-panel" id="learning-panel" aria-labelledby="learning-title" hidden>
+          <header class="learning-heading">
+            <div class="learning-heading-top"><span>PART GUIDE</span><button class="icon-btn" id="learning-close" aria-label="Close part guide" title="Hide part guide"><i data-lucide="x"></i></button></div>
+            <h2 id="learning-title" tabindex="-1">PG9171E gas turbine</h2>
+            <p id="learning-system">Complete assembly</p>
+          </header>
+          <div class="learning-tabs" role="tablist" aria-label="Part knowledge">
+            <button role="tab" id="learning-tab-operation" data-lesson-tab="operation" aria-controls="learning-operation" aria-selected="true">Function</button>
+            <button role="tab" id="learning-tab-design" data-lesson-tab="design" aria-controls="learning-design" aria-selected="false" tabindex="-1">Design</button>
+            <button role="tab" id="learning-tab-watch" data-lesson-tab="watch" aria-controls="learning-watch" aria-selected="false" tabindex="-1">In service</button>
+          </div>
+          <div class="learning-content" id="learning-content"></div>
+        </aside>
+        <div class="sr-only" id="learning-announcement" aria-live="polite" aria-atomic="true"></div>
+      </div>
+    </div>
+    <dialog id="references-dialog"><div class="dialog-heading"><div><span class="eyebrow">RECONSTRUCTION RECORD</span><h2>References &amp; fidelity</h2></div><button class="icon-btn" data-close="references-dialog" aria-label="Close references"><i data-lucide="x"></i></button></div><div class="dialog-body">
+      <p class="notice">This is a geometric reconstruction of the PG9171E / MS9001E DLN1 configuration. Component counts and architecture follow the source video; most lengths, casing profiles, blade airfoils and clearances are estimated. It is not a dimensional replica or manufacturing model.</p>
+      <a class="source-item" href="https://www.youtube.com/watch?v=4r1-IMMS73s&t=822s" target="_blank" rel="noreferrer"><span>01</span><div><b>Gas turbine training / Oil Gas World</b><small>Primary visual reference · PG9171E · DLN1 combustion</small></div><i data-lucide="external-link"></i></a>
+      <table><thead><tr><th>Assembly evidence</th><th>Verified detail</th><th>Video</th></tr></thead><tbody><tr><td>Compressor</td><td>17 rows, 16 tie bolts, 64 IGVs</td><td>01:38 / 04:16</td></tr><tr><td>Combustion</td><td>14 chambers, 13° wrapper face</td><td>09:24 / 11:21</td></tr><tr><td>DLN1 nozzle head</td><td>6 primary + 1 secondary</td><td>16:31</td></tr><tr><td>Turbine rotor</td><td>92 buckets per stage</td><td>31:12 / 33:24 / 35:22</td></tr><tr><td>Turbine nozzles</td><td>36 / 48 / 64 vanes</td><td>24:58 / 27:18 / 29:36</td></tr><tr><td>Exhaust</td><td>10 struts, 5 turning vanes</td><td>40:11 / 43:05</td></tr></tbody></table>
+      <a class="source-item" href="https://turbolab.tamu.edu/wp-content/uploads/2018/08/Tutorial-04.pdf" target="_blank" rel="noreferrer"><span>02</span><div><b>LNG Turbomachinery / Texas A&amp;M, 2011</b><small>GE coauthored · Figure 18 · architecture and cutaway</small></div><i data-lucide="external-link"></i></a>
+      <a class="source-item" href="https://www.tfd.chalmers.se/~thgr/gasturbiner/Material_for_generating_slides/pdf_documents/GeGasTurbineDesignPhilosophy.pdf" target="_blank" rel="noreferrer"><span>03</span><div><b>GE GER-3434D / Design Philosophy</b><small>MS9001E compressor tip diameter: 2,161.5 mm</small></div><i data-lucide="external-link"></i></a>
+      <a class="source-item" href="https://www.bhel.com/sites/default/files/ROTOR%20DRAWING%206934.pdf" target="_blank" rel="noreferrer"><span>04</span><div><b>BHEL / Rotor drawings</b><small>Frame 9E compressor and turbine reference drawings</small></div><i data-lucide="external-link"></i></a>
+      <p>Compressor blade populations, fastener sizes, casing thicknesses, pipe routes and colors are illustrative. No performance simulation or tolerance validation is implied.</p><a class="text-btn" href="/model-notes.md" download><i data-lucide="file-text"></i>Download full reconstruction notes</a>
+    </div></dialog>
+    <dialog id="export-dialog"><div class="dialog-heading"><div><span class="eyebrow">PG9171E / R01</span><h2>Export assembly</h2></div><button class="icon-btn" data-close="export-dialog" aria-label="Close export"><i data-lucide="x"></i></button></div><div class="dialog-body"><label class="export-scope" for="export-scope">Assembly state<select id="export-scope"><option value="assembled">Complete, assembled</option><option value="current">Visible parts, current separation</option></select></label><div class="export-list"><button data-export="glb"><i data-lucide="box"></i><span><b>glTF Binary</b><small>Named parts, materials · metres</small></span><code>.glb</code></button><button data-export="stl"><i data-lucide="triangle"></i><span><b>STL mesh</b><small>Triangulated surfaces · millimetres</small></span><code>.stl</code></button><a href="/pg9171e.scad" download><i data-lucide="file-code-2"></i><span><b>Parametric OpenSCAD</b><small>Simplified editable solids · millimetres</small></span><code>.scad</code></a></div><p class="export-note">Section planes affect the display only. Mesh exports retain full surfaces; they are not STEP solids or certified watertight manufacturing geometry. The OpenSCAD model is a separate, simplified parametric reconstruction.</p><p id="export-status" role="status"></p></div></dialog>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
