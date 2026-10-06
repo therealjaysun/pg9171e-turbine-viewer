@@ -1,5 +1,7 @@
 # Hot-Section Geometry Audit
 
+This records the R02 baseline. See [the subsequent direct video comparison](video-check-turbine.md) and [combustion comparison](video-check-combustion.md) for R03 corrections and additional visible differences.
+
 Audit date: 2026-10-06. Scope: all 59 selectable combustion, turbine and exhaust parts. Part IDs are unchanged.
 
 ## Evidence and Limits

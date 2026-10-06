@@ -1,5 +1,7 @@
 # Inlet and Compressor Geometry Audit
 
+This records the R02 baseline. See [the subsequent direct video comparison](video-check-compressor.md) for R03 corrections and additional visible differences.
+
 Reviewed 2026-10-06. Scope: all 46 selectable inlet/compressor parts in the browser mesh. This is a bounded reconstruction review, not an assertion that the model is indistinguishable from OEM geometry. The source is a rendered training animation, not a dimensioned production model.
 
 ## Reference Checks

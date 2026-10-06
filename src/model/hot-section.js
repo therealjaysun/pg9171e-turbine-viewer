@@ -4,7 +4,7 @@ import {
   TAU, palette, material, part, mesh, lathe, ring, box, rod,
   bolts, bladeRow, splitCasing, hollowTube,
 } from './helpers.js';
-import {piercedSleeve, piercedPlate, hollowRod, cooledBladeRow} from './hot-channels.js';
+import {piercedSleeve, piercedPlate, hollowRod, cooledBladeRow, cooledNozzleRow, nozzleOuterPlatform} from './hot-channels.js';
 import {subtractGeometry} from './csg.js';
 
 const CANT = 13 * Math.PI / 180;
@@ -250,13 +250,23 @@ export function buildHotSection(ctx) {
     });
     const frame = canFrame(can, angle);
     const crossfireHoles = [Math.PI / 2, -Math.PI / 2].map(a => ({x: 0.14, angle: a, bore: 0.055}));
-    piercedSleeve(frame, {x0: -0.16, x1: 0.90, radius: 0.287, thickness: 0.018, holes: crossfireHoles, material: mats.chamber});
+    const admissionHoles = [0.65, 0.715, 0.78, 0.845].flatMap((x, row) =>
+      Array.from({length: 12}, (_, j) => ({x, angle: (j + 0.5 * (row % 2)) * TAU / 12, bore: 0.022})));
+    const sleeve = piercedSleeve(frame, {x0: -0.16, x1: 0.90, radius: 0.287, thickness: 0.018,
+      holes: [...crossfireHoles, ...admissionHoles], material: mats.chamber});
+    // The source shows an aft perforated, tapered air-entry sleeve at 12:21.
+    const sleevePositions = sleeve.geometry.getAttribute('position');
+    for (let v = 0; v < sleevePositions.count; v++) {
+      const x = sleevePositions.getX(v), y = sleevePositions.getY(v), z = sleevePositions.getZ(v);
+      const radius = Math.hypot(y, z), reduction = 0.027 * THREE.MathUtils.clamp((x - 0.745) / 0.155, 0, 1);
+      sleevePositions.setXYZ(v, x, y * (radius - reduction) / radius, z * (radius - reduction) / radius);
+    }
+    sleeve.geometry.computeVertexNormals();
     const capHoles = Array.from({length: 6}, (_, j) => ({y: Math.cos(j * TAU / 6) * 0.167, z: Math.sin(j * TAU / 6) * 0.167, radius: 0.045}));
     piercedPlate(frame, {x0: -0.225, x1: -0.17, outer: 0.32, holes: [...capHoles, {y: 0, z: 0, radius: 0.052}], material: mats.steel});
     ring(frame, -0.155, 0.329, 0.063, 0.07, mats.steel, 40);
-    ring(frame, 0.745, 0.314, 0.055, 0.06, mats.chamber, 40);
     bolts(frame, -0.265, 0.292, 12, 0.022, mats.bolt);
-    ring(frame, 0.84, 0.30, 0.035, 0.034, mats.steel, 40);
+    ring(frame, 0.888, 0.263, 0.018, 0.019, mats.steel, 40);
     for (let k = 0; k < 6; k++) {
       const phi = k * TAU / 6;
       const nozzle = new THREE.Group();
@@ -276,7 +286,8 @@ export function buildHotSection(ctx) {
     hollowTube(frame, [[-0.42, 0, 0], [-0.50, 0.08, 0], [-0.46, 0.37, 0]], 0.021, 0.006, mats.fuel, 16);
     port(frame, 0.14, 0.287, Math.PI / 2, 0.055, mats.steel);
     port(frame, 0.14, 0.287, -Math.PI / 2, 0.055, mats.steel);
-    can.userData.channels = {sleeveInnerRadius: 0.269, linerOuterRadius: 0.246, airJacketRadialGap: 0.023, coverPenetrations: 7, crossfireBores: 2};
+    can.userData.channels = {sleeveInnerRadius: 0.269, linerOuterRadius: 0.246, airJacketRadialGap: 0.023,
+      coverPenetrations: 7, crossfireBores: 2, sleeveAdmissionHoles: admissionHoles, admissionPatternEstimated: true};
 
     if ([11, 12].includes(number)) {
       rod(frame, [0.03, 0.24, 0], [-0.03, 0.46, 0], 0.029, mats.steel);
@@ -301,7 +312,7 @@ export function buildHotSection(ctx) {
       ...Array.from({length: 6}, (_, j) => ({x: 0.215, angle: j * TAU / 6 + 0.25, bore: 0.021})),
       ...Array.from({length: 6}, (_, j) => ({x: 0.275, angle: j * TAU / 6, bore: 0.016})),
     ];
-    const slots = Array.from({length: 24}, (_, j) => 0.055 + j * 0.0365)
+    const slots = Array.from({length: 10}, (_, j) => 0.055 + j * 0.0365)
       .filter(x => linerHoles.every(h => Math.abs(h.x - x) > h.bore + 0.02));
     let from = 0.01;
     for (const end of [...slots, 0.97]) {
@@ -319,9 +330,8 @@ export function buildHotSection(ctx) {
       ...Array.from({length: 6}, (_, j) => ({y: Math.cos(j * TAU / 6) * 0.167, z: Math.sin(j * TAU / 6) * 0.167, radius: 0.052})),
       {y: 0, z: 0, radius: 0.060}], material: mats.coating});
     ring(linerFrame, 0.02, 0.242, 0.044, 0.055, mats.steel, 32);
-    lathe(linerFrame, [[0.31, 0.231], [0.365, 0.162], [0.45, 0.141],
-      [0.59, 0.218], [0.60, 0.229], [0.46, 0.157], [0.373, 0.178],
-      [0.33, 0.231]], mats.coating, 32);
+    lathe(linerFrame, [[0.37, 0.231], [0.455, 0.158], [0.535, 0.231],
+      [0.535, 0.219], [0.455, 0.146], [0.37, 0.219], [0.37, 0.231]], mats.coating, 48);
     for (let j = 0; j < 3; j++) {
       port(linerFrame, 0.80, 0.237, j * TAU / 3, 0.040, mats.steel);
       box(linerFrame, [0.09, 0.047, 0.05], radial(0.047, 0.25, j * TAU / 3), mats.bolt).rotation.x = j * TAU / 3;
@@ -331,9 +341,15 @@ export function buildHotSection(ctx) {
       port(linerFrame, 0.275, 0.237, j * TAU / 6, 0.016, mats.steel);
     }
     for (const a of [Math.PI / 2, -Math.PI / 2]) port(linerFrame, 0.14, 0.237, a, 0.049, mats.steel);
-    ring(linerFrame, 0.945, 0.240, 0.045, 0.015, mats.steel, 40);
+    ring(linerFrame, 0.922, 0.240, 0.012, 0.015, mats.steel, 64);
+    for (let finger = 0; finger < 96; finger++) {
+      lathe(linerFrame, [[0.925, 0.238], [0.942, 0.240], [0.974, 0.240],
+        [0.974, 0.237], [0.942, 0.237], [0.925, 0.235], [0.925, 0.238]],
+      mats.steel, 2, finger * TAU / 96, TAU / 96 - 0.0015);
+    }
     liner.userData.channels = {dilutionBores: 3, meteringBores: 12, crossfireBores: 2, capAirPassages: 7,
-      filmSlots: slots.length, filmSlotWidth: 0.003, filmLipGap: 0.003, throatRadius: 0.141};
+      filmSlots: slots.length, filmSlotWidth: 0.003, filmLipGap: 0.003, throatRadius: 0.146,
+      filmSlotStations: slots, smoothAftStart: 0.535, sealFingers: 96, sealFingerCountEstimated: true};
 
     const transition = part(ctx, {
       id: `transition-${number}`, name: `Transition piece ${String(number).padStart(2, '0')}`,
@@ -436,11 +452,14 @@ export function buildHotSection(ctx) {
       explode: [stage * 0.66 + 0.08, 0.72, 0],
     });
     const nozzleX = x - [0.290, 0.315, 0.330][stage];
-    const nozzleBlades = stage < 2 ? cooledBladeRow : bladeRow;
-    nozzleBlades(nozzle, nozzleX, vaneCounts[stage], {root: root + 0.006, tip: tip + 0.026,
+    const nozzleBlades = stage < 2 ? cooledNozzleRow : bladeRow;
+    const nozzleParams = {root: root + 0.006, tip: tip + 0.026,
       chord: stage === 0 ? 0.245 : 0.29, twist: -0.59, sweep: 0.10, thickness: 0.12,
-      camber: -0.18, lean: -0.024}, stage === 0 ? mats.coating : mats.stator);
-    turbineShroud(nozzle, nozzleX, tip + 0.047, 0.24, stage === 0 ? 18 : 16, mats.stator);
+      camber: -0.18, lean: -0.024};
+    nozzleBlades(nozzle, nozzleX, vaneCounts[stage], nozzleParams, stage === 0 ? mats.coating : mats.stator);
+    if (stage < 2) nozzleOuterPlatform(nozzle, nozzleX, nozzleParams, vaneCounts[stage], stage ? 16 : 18,
+      mats.stator, mats.steel, stage === 0);
+    else turbineShroud(nozzle, nozzleX, tip + 0.047, 0.24, 16, mats.stator);
     ring(nozzle, nozzleX, root + 0.008, stage === 0 ? 0.20 : 0.14, 0.063, mats.stator, 80);
     if (stage > 0) {
       ring(nozzle, nozzleX + 0.025, root - 0.015, 0.14, root - 0.015 - 0.643, mats.stator, 80);
@@ -448,7 +467,8 @@ export function buildHotSection(ctx) {
         0.009, 0.012, mats.bolt, 64);
     }
     nozzle.userData.clearances = {centerX: nozzleX, rotorCenterX: x, estimatedAirfoilAxialGap: [0.0293, 0.0305, 0.0301][stage]};
-    nozzle.userData.channels = {coolingPassagesPerVane: stage < 2 ? 3 : 0, topology: 'Representative spanwise passages, not OEM internal cavity'};
+    nozzle.userData.channels = {hollowPartitions: stage < 2, trailingEdgePortsPerVane: stage < 2 ? 11 : 0,
+      impingementCover: stage === 0, topology: stage < 2 ? 'Hollow cavity and trailing-edge exits; inferred cavity contour and hole count' : 'Uncooled'};
   }
 
   const wheelSpacers = part(ctx, {
@@ -489,12 +509,12 @@ export function buildHotSection(ctx) {
       const begin = half === 'upper' ? Math.PI : 0;
       // Stationary tip shrouds belong to the shell, not the rotating bucket band.
       for (let segment = 0; segment < count / 2; segment++) {
-        lathe(casing, [[x - 0.13, inner], [x - 0.13, inner + 0.050],
-          [x + 0.15, inner + 0.050], [x + 0.15, inner], [x - 0.13, inner]],
+        lathe(casing, [[x - 0.075, inner], [x - 0.075, inner + 0.050],
+          [x + 0.15, inner + 0.050], [x + 0.15, inner], [x - 0.075, inner]],
         stage === 0 ? mats.coating : mats.stator, 10, begin + segment * TAU / count + 0.003, TAU / count - 0.006);
       }
-      splitCasing(casing, [[x - 0.105, inner + 0.048], [x - 0.105, inner + 0.11],
-        [x - 0.078, inner + 0.11], [x - 0.078, inner + 0.048], [x - 0.105, inner + 0.048]], mats.steel, {half});
+      splitCasing(casing, [[x - 0.060, inner + 0.048], [x - 0.060, inner + 0.11],
+        [x - 0.033, inner + 0.11], [x - 0.033, inner + 0.048], [x - 0.060, inner + 0.048]], mats.steel, {half});
     }
     casing.userData.clearances = {stationaryTipShrouds: 3, stageTipGaps: [0.012, 0.008, 0.008]};
     for (let j = 0; j < 7; j++) {

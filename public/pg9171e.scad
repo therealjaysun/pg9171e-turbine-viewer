@@ -179,11 +179,17 @@ module combustor_can() {
     // and the individual fuel-nozzle flow circuits remain simplified here.
     color(hot_color) {
         if(show_casings) half_display() difference() {
-            xtube(-160,945,287,287,22);
+            union() {
+                xtube(-160,745,287,287,18);
+                xtube(745,900,287,260,18);
+            }
             for(a=[90,270]) radial_bore(140,220,340,49,a);
+            // Visible aft admission rows; count and sizes remain illustrative.
+            for(row=[0:3],j=[0:11])
+                radial_bore(650+row*65,240,310,22,(j+.5*(row%2))*30);
         }
         ring(-155,329,63,70);
-        ring(840,300,35,34);
+        ring(888,263,18,19);
         bolt_ring(-265,292,12,12);
     }
     color(steel) {
@@ -214,8 +220,13 @@ module combustor_can() {
             radial(6) translate([0,167,0]) xcylinder(14,30,52);
             xcylinder(14,30,60);
         }
-        xprofile([[270,231],[365,162],[450,141],[590,218],[600,229],
-            [460,157],[373,178],[290,231]]);
+        xprofile([[370,231],[455,158],[535,231],[535,219],[455,146],[370,219]]);
+        ring(922,240,12,15);
+        difference() {
+            xprofile([[925,238],[942,240],[974,240],[974,237],[942,237],[925,235]]);
+            for(a=[0:360/96:359.99]) rotate([a,0,0])
+                translate([928,230,-.18]) cube([47,20,.36]);
+        }
     }
 }
 

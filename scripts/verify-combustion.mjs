@@ -42,6 +42,12 @@ export function verifyCombustion(model) {
       radialTest(liner, 0.14, phi, 0.266, 0.211, true, 'liner crossfire bore');
       radialTest(can, 0.14, phi, 0.313, 0.252, true, 'sleeve crossfire bore');
     }
+    for (const hole of can.userData.channels.sleeveAdmissionHoles) {
+      radialTest(can, hole.x, hole.angle, 0.310, 0.248, true, 'aft sleeve air-admission bore');
+    }
+    for (const x of [0.65, 0.78]) {
+      radialTest(can, x, TAU / 24, 0.310, 0.248, false, 'air-admission adjacent wall');
+    }
     const capCenters = [[0, 0], ...Array.from({length: 6}, (_, j) => [0.167 * Math.cos(j * TAU / 6), 0.167 * Math.sin(j * TAU / 6)])];
     for (const [y, z] of capCenters) {
       check([liner], canPoint(angle, [-0.005, y, z]), canPoint(angle, [0.060, y, z]), true, `${number}: cap passage`);
@@ -51,6 +57,11 @@ export function verifyCombustion(model) {
     check([liner], filmPoint(0.044, 0.2385), filmPoint(0.0565, 0.2385), true, `${number}: cooling lip inlet`);
     check([liner], filmPoint(0.0565, 0.2385), filmPoint(0.0565, 0.220), true, `${number}: cooling slot exit`);
     voidChecks += 2;
+    check([liner], filmPoint(0.60, 0.244), filmPoint(0.90, 0.244), true,
+      `${number}: source-visible smooth aft liner must not acquire cooling-ring ridges`);
+    voidChecks++;
+    radialTest(liner, 0.455, Math.PI / 6, 0.001, 0.145, true, 'open Venturi throat');
+    radialTest(liner, 0.455, Math.PI / 6, 0.150, 0.170, false, 'Venturi throat wall');
     for (let j = 0; j < 4; j++) {
       const phi = j * TAU / 4;
       check([can, liner], canPoint(angle, [0.34, 0.255 * Math.cos(phi), 0.255 * Math.sin(phi)]),

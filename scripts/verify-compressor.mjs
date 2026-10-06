@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
+import {MeshBVH} from 'three-mesh-bvh';
 
 const TAU = Math.PI * 2;
 
@@ -38,6 +39,15 @@ function profileBoreAt(profile, x) {
 function radialRay(x, angle, radius, length) {
   return new THREE.Raycaster(new THREE.Vector3(x, radius * Math.cos(angle), radius * Math.sin(angle)),
     new THREE.Vector3(0, -Math.cos(angle), -Math.sin(angle)), 0, length);
+}
+
+function insideProfile(profile, x, radius) {
+  let inside = false;
+  for (let i = 0, j = profile.length - 1; i < profile.length; j = i++) {
+    const [xi, ri] = profile[i], [xj, rj] = profile[j];
+    if ((ri > radius) !== (rj > radius) && x < (xj - xi) * (radius - ri) / (rj - ri) + xi) inside = !inside;
+  }
+  return inside;
 }
 
 export function verifyCompressor(model) {
@@ -128,8 +138,49 @@ export function verifyCompressor(model) {
   }
   assert.equal(tagged(model, 'compressor-igv-inner-segment').length, 16, 'Video: sixteen IGV inner support segments');
 
+  const platforms = tagged(model, 'compressor-blade-platforms');
+  assert.equal(platforms.length, 17, 'Every wheel needs the visible platform/dovetail profile');
+  for (const {part, object} of platforms) {
+    assert.equal(object.userData.dovetail, true, `${part.id}: platform lost its dovetail root`);
+    const drum = drums.find(entry => entry.part.id === part.id).object;
+    const profile = object.geometry.userData.profile;
+    assert.ok(profile.length > 10, `${part.id}: dovetail was replaced by a rectangular block`);
+    for (let i = 1; i < profile.length; i++) {
+      for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+        const x = object.userData.station + profile[i - 1][0] * (1 - t) + profile[i][0] * t;
+        const radius = profile[i - 1][1] * (1 - t) + profile[i][1] * t;
+        assert.equal(insideProfile(drum.geometry.userData.profile, x, radius), false, `${part.id}: dovetail intersects its wheel-rim seat`);
+      }
+    }
+  }
+  const squareBases = tagged(model, 'compressor-stator-dovetail-bases');
+  assert.equal(squareBases.length, 9, 'Video: final nine stator stages need individual square-based roots');
+  for (const {part, object} of squareBases) {
+    assert.equal(object.userData.squareBase, true, `${part.id}: missing square-based dovetail`);
+    for (const point of rowVertices(object)) {
+      const bore = Math.min(...walls.map(({object: wall}) => profileBoreAt(wall.geometry.userData.profile, point.x)));
+      assert.ok(bore - Math.hypot(point.y, point.z) > 0.001, `${part.id}: square root intersects casing recess`);
+    }
+  }
+  const pinions = tagged(model, 'compressor-igv-pinion-gears')[0]?.object;
+  const rack = tagged(model, 'compressor-igv-rack-teeth')[0]?.object;
+  assert.equal(pinions?.count, 64, 'Each IGV needs its fine-tooth pinion');
+  assert.equal(pinions.userData.toothCountInferred, true, 'Do not present rendered tooth count as video-established');
+  assert.equal(rack?.count, 768, 'Missing reconstructed fine-tooth annular rack');
+  assert.equal(tagged(model, 'compressor-igv-stem-caps')[0]?.object.count, 64, 'Missing stepped stem caps');
+  const gearTree = new MeshBVH(pinions.geometry, {indirect: true});
+  const gearMatrix = new THREE.Matrix4(), toothMatrix = new THREE.Matrix4();
+  pinions.getMatrixAt(0, gearMatrix);
+  gearMatrix.premultiply(pinions.matrixWorld).invert();
+  for (let i = -6; i <= 6; i++) {
+    rack.getMatrixAt((i + rack.count) % rack.count, toothMatrix);
+    toothMatrix.premultiply(rack.matrixWorld).premultiply(gearMatrix);
+    assert.equal(gearTree.intersectsGeometry(rack.geometry, toothMatrix), false, 'IGV rack tooth intersects a pinion tooth');
+  }
+
   const metrics = {axialGapMm: axialGap * 1000, rotorWallGapMm: rotorWallGap * 1000,
-    statorWallGapMm: statorWallGap * 1000, adjacentBladeGapDeg: angularGap * 180 / Math.PI, boltBores, bleedBores, igvBores: 64};
+    statorWallGapMm: statorWallGap * 1000, adjacentBladeGapDeg: angularGap * 180 / Math.PI, boltBores, bleedBores, igvBores: 64,
+    profiledRotorRoots: platforms.length, squareStatorRootRows: squareBases.length, pinionRackMeshProbes: 13};
   console.log('Compressor mesh-clearance and open-channel checks passed:', JSON.stringify(metrics));
   return metrics;
 }

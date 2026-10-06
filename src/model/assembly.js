@@ -63,6 +63,35 @@ function bearingHousing(parent, station, mat, boltMat) {
     shell.geometry=subtractGeometry(source,[combinedCuts]);
     source.dispose();
   }
+  // The reference housings have a flat bolted split line, not a plain barrel.
+  // Keep the reconstructed flange envelope inside the existing frame aperture.
+  for(const side of [-1,1]) for(const half of [-1,1]) {
+    const railGeometry=new THREE.BoxGeometry(end-start-.04,.050,.100);
+    railGeometry.translate((start+end)/2,half*.027,side*.406);
+    const rail=new THREE.Mesh(subtractGeometry(railGeometry,[combinedCuts]),mat);
+    railGeometry.dispose();parent.add(rail);
+    named(rail,`Bearing ${number} ${half<0?'lower':'upper'} split-line flange`,'bearing-split-flange');
+    for(const fraction of [.12,.50,.88]) {
+      const boltX=start+(end-start)*fraction;
+      if(Math.abs(boltX-(x-.07))<.045)continue;
+      named(rod(parent,[boltX,half*.052,side*.417],[boltX,half*.064,side*.417],.012,boltMat,6),
+        `Bearing ${number} split-line fastening head`,'bearing-split-fastener');
+    }
+  }
+  if(number===1) {
+    const outline=new THREE.Shape();
+    outline.moveTo(x-.205,-.390);outline.lineTo(x+.215,-.390);
+    outline.lineTo(x+.215,-.510);outline.lineTo(x+.050,-.705);
+    outline.lineTo(x-.125,-.705);outline.lineTo(x-.205,-.520);outline.closePath();
+    const raw=new THREE.ExtrudeGeometry(outline,{depth:.21,bevelEnabled:false,steps:1});
+    raw.translate(0,0,-.105);
+    const drain=new THREE.CylinderGeometry(.035,.035,.46,24);drain.translate(x,-.57,0);
+    const foot=new THREE.Mesh(subtractGeometry(raw,[drain]),mat);parent.add(foot);
+    named(foot,'Bearing 1 tapered lower casting with open drain','bearing-casting-foot');
+    named(hollowRod(parent,[x,-.448,0],[x,-.730,0],.044,.035,mat,24),
+      'Bearing 1 drain continuation through lower casting','bearing-passage');
+    raw.dispose();drain.dispose();
+  }
   for(const geometry of cutters) geometry.dispose();
   combinedCuts.dispose();
   for(const port of ports) {
@@ -131,8 +160,19 @@ function thrustPads(parent,mat,steel) {
       const y=-Math.sin(angle)*.286,z=Math.cos(angle)*.286;
       named(rod(parent,[back,y,z],[baseX-side*.012,y,z],.018,steel),`${label} pad pivot`,'thrust-pivot');
       if(side===-1) {
-        const plate=box(parent,[.015,.018,.125],[back-.019,y,z],steel);
-        plate.rotation.x=angle;named(plate,'Active thrust equalizing plate (representative)','thrust-equalizer');
+        for(const [tier,phase,plateX] of [['upper',0,back-.015],['lower',TAU/16,back-.029]]) {
+          const plateAngle=angle+phase;
+          const plate=box(parent,[.010,.030,.114],[plateX,-Math.sin(plateAngle)*.286,Math.cos(plateAngle)*.286],steel);
+          plate.rotation.x=plateAngle+Math.PI/2;
+          named(plate,`Active thrust ${tier} leveling plate (representative)`,'thrust-equalizer');
+          plate.userData.levelingTier=tier;
+        }
+      } else {
+        const gapAngle=a-.045;
+        const plate=box(parent,[.028,.084,.010],[back-.010,-Math.sin(gapAngle)*.2835,Math.cos(gapAngle)*.2835],steel);
+        // Local Y spans the pad radius; local Z lies along the circumference.
+        plate.rotation.x=gapAngle+Math.PI/2;
+        named(plate,'Inactive thrust inter-pad oil-control plate (representative)','thrust-oil-control');
       }
     }
   }
@@ -159,6 +199,8 @@ function tiltingJournal(parent,station,mat,steel) {
     const center=angle+(TAU/5-.12)/2;
     const radial=r=>[x,-Math.sin(center)*r,Math.cos(center)*r];
     named(rod(parent,radial(outer),radial(.284),.021,steel),'Bearing 3 pad pivot pin','journal-pivot');
+    named(rod(parent,radial(.274),radial(.299),.046,steel,32),
+      'Bearing 3 circular tilting-pad pivot head','journal-pivot-head');
     for(const side of [-1,1]) {
       const phi=center+side*.36;
       const y=-Math.sin(phi)*.274,z=Math.cos(phi)*.274;

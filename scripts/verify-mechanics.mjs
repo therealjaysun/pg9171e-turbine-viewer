@@ -54,10 +54,21 @@ export function verifyMechanics(model) {
     assert.ok(sealGap>.0029,`${id}: seal/shaft interference, gap ${sealGap} m`);
     const housing=role(id,'bearing-housing');
     assert.equal(housing.length,2,`${id}: housing must have two halves`);
+    const splitFlanges=role(id,'bearing-split-flange');
+    assert.equal(splitFlanges.length,4,`${id}: both housing halves need paired split-line flanges`);
+    for(const flange of splitFlanges) {
+      const vertices=flange.geometry.attributes.position;
+      for(let i=0;i<vertices.count;i++) {
+        position.fromBufferAttribute(vertices,i).applyMatrix4(flange.matrixWorld);
+        assert.ok(Math.hypot(position.y,position.z)<.465,`${id}: flange enters the frame aperture`);
+      }
+    }
     ray.set(new THREE.Vector3(x,-.5,0),new THREE.Vector3(0,1,0));ray.near=0;ray.far=.19;
     assert.equal(ray.intersectObjects(housing).length,0,`${id}: housing oil drain is blocked`);
     ray.set(new THREE.Vector3(x+.10,-.5,0),new THREE.Vector3(0,1,0));
     assert.ok(ray.intersectObjects(housing).length,`${id}: drain check requires an intact adjacent wall`);
+    ray.set(new THREE.Vector3(x-.07,0,.54),new THREE.Vector3(0,0,-1));ray.near=0;ray.far=.22;
+    assert.equal(ray.intersectObjects([...housing,...splitFlanges]).length,0,`${id}: split-line flange blocks the oil feed`);
     summary.push(`${id}: journal ${(journalGap*1000).toFixed(3)} mm, seal ${(sealGap*1000).toFixed(3)} mm`);
   }
 
@@ -71,6 +82,18 @@ export function verifyMechanics(model) {
     const gap=bounds.max.x<runnerBounds.min.x?runnerBounds.min.x-bounds.max.x:bounds.min.x-runnerBounds.max.x;
     assert.ok(gap>.0039&&gap<.0041,`Stationary thrust pad overlaps or misses its runner: ${gap} m`);
   }
+  const equalizers=role('bearing-1','thrust-equalizer');
+  for(const tier of ['upper','lower']) assert.equal(equalizers.filter(object=>object.userData.levelingTier===tier).length,8,
+    `The active thrust assembly needs a separate ${tier} leveling-plate tier`);
+  assert.equal(role('bearing-1','thrust-oil-control').length,8,'Inactive thrust inter-pad oil-control plates are missing');
+  assert.equal(role('bearing-3','journal-pivot-head').length,5,'Each rear journal pad needs its visible circular pivot head');
+  const foot=role('bearing-1','bearing-casting-foot');
+  assert.equal(foot.length,1,'The first housing needs its tapered lower casting');
+  const footBounds=new THREE.Box3().setFromObject(foot[0]);
+  assert.ok(footBounds.min.x> -5.10,'The bearing lower casting penetrates the inlet front plate');
+  ray.set(new THREE.Vector3(-4.85,-.8,0),new THREE.Vector3(0,1,0));ray.near=0;ray.far=.47;
+  assert.equal(ray.intersectObjects([...foot,...role('bearing-1','bearing-passage')]).length,0,
+    'The lower casting or drain continuation obstructs the oil bore');
   ray.set(new THREE.Vector3(-5.22,0,0),new THREE.Vector3(0,1,0));ray.near=0;ray.far=.5;
   const housingHit=ray.intersectObjects(role('bearing-1','bearing-housing'))[0];
   assert.ok(housingHit,'The thrust runner must be enclosed by a housing');

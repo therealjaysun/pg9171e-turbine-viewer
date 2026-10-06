@@ -133,6 +133,151 @@ export function cooledBladeRow(parent, x, count, params, material, phase = 0) {
   return result;
 }
 
+function nozzleCavity(params) {
+  const positions = [], indices = [], steps = 16;
+  const fractions = [0.025, 0.25, 0.5, 0.75, 1, 1.35];
+  for (const f of fractions) {
+    const c = params.chord * (1 - 0.3 * f), angle = params.twist * (1 - 0.48 * f);
+    for (let side = 0; side < 2; side++) for (let i = side ? 1 : 0; i <= (side ? steps - 1 : steps); i++) {
+      const t = side ? 1 - i / steps : i / steps, u = 0.12 + t * 0.76;
+      const half = 5 * params.thickness * c * (0.2969 * Math.sqrt(u) - 0.126 * u - 0.3516 * u ** 2 + 0.2843 * u ** 3 - 0.1036 * u ** 4);
+      const p = airfoilPoint(params, u, f);
+      const offset = (side ? -1 : 1) * half * 0.48 * Math.sqrt(Math.max(0, Math.sin(Math.PI * t)));
+      positions.push(p[0] - offset * Math.sin(angle), p[1], p[2] + offset * Math.cos(angle));
+    }
+  }
+  const row = steps * 2;
+  for (let j = 0; j < fractions.length - 1; j++) for (let k = 0; k < row; k++) {
+    const a = j * row + k, b = j * row + (k + 1) % row;
+    indices.push(a, b, a + row, b, b + row, a + row);
+  }
+  for (const j of [0, fractions.length - 1]) {
+    const base = j * row;
+    const contour = Array.from({length: row}, (_, i) => new THREE.Vector2(positions[(base + i) * 3], positions[(base + i) * 3 + 2]));
+    for (const triangle of THREE.ShapeUtils.triangulateShape(contour, [])) {
+      const [a, b, c] = triangle.map(i => base + i);
+      const pa = new THREE.Vector3().fromArray(positions, a * 3), pb = new THREE.Vector3().fromArray(positions, b * 3), pc = new THREE.Vector3().fromArray(positions, c * 3);
+      const correct = (pb.sub(pa).cross(pc.sub(pa)).y > 0) === (j > 0);
+      indices.push(a, correct ? b : c, correct ? c : b);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices); geometry.computeVertexNormals();
+  return geometry;
+}
+
+function cappedPort(params, fraction, radius) {
+  const points = Array.from({length: 7}, (_, i) => new THREE.Vector3(...airfoilPoint(params, 0.62 + i * 0.46 / 6, fraction)));
+  const path = new THREE.CatmullRomCurve3(points);
+  const geometry = new THREE.TubeGeometry(path, 16, radius, 10, false);
+  const positions = Array.from(geometry.attributes.position.array), indices = Array.from(geometry.index.array);
+  for (const end of [0, 16]) {
+    const point = path.getPointAt(end / 16), tangent = path.getTangentAt(end / 16).multiplyScalar(end ? 1 : -1);
+    const center = positions.length / 3; positions.push(...point.toArray());
+    for (let k = 0; k < 10; k++) {
+      const a = end * 11 + k, b = a + 1;
+      const pa = new THREE.Vector3().fromArray(positions, a * 3), pb = new THREE.Vector3().fromArray(positions, b * 3);
+      const correct = pa.sub(point).cross(pb.sub(point)).dot(tangent) > 0;
+      indices.push(center, correct ? a : b, correct ? b : a);
+    }
+  }
+  geometry.dispose();
+  const result = new THREE.BufferGeometry();
+  result.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  result.setIndex(indices); result.computeVertexNormals();
+  return {geometry: result, points: points.map(p => p.toArray())};
+}
+
+function radialInstances(parent, geometry, material, x, count, phase = 0) {
+  const result = new THREE.InstancedMesh(geometry, material, count), dummy = new THREE.Object3D();
+  for (let i = 0; i < count; i++) {
+    dummy.position.set(x, 0, 0); dummy.rotation.set(phase + i * TAU / count, 0, 0); dummy.updateMatrix();
+    result.setMatrixAt(i, dummy.matrix);
+  }
+  result.castShadow = true; result.receiveShadow = true; parent.add(result); return result;
+}
+
+function stabilizeNozzleCsg(source) {
+  // Collapse micron-scale CSG intersection edges before Float32 millimetre export.
+  // Neighbor faces share the replacement vertex; this does not punch out slivers.
+  const positionsOnly = source.clone(); positionsOnly.deleteAttribute('normal');
+  const geometry = mergeVertices(positionsOnly, 1e-7); positionsOnly.dispose();
+  const p = geometry.attributes.position, parents = Array.from({length: p.count}, (_, i) => i);
+  const root = i => { while (parents[i] !== i) { parents[i] = parents[parents[i]]; i = parents[i]; } return i; };
+  for (let i = 0; i < geometry.index.count; i += 3) {
+    const ids = [0, 1, 2].map(j => geometry.index.getX(i + j));
+    for (let j = 0; j < 3; j++) {
+      const a = ids[j], b = ids[(j + 1) % 3];
+      if (Math.hypot(p.getX(a) - p.getX(b), p.getY(a) - p.getY(b), p.getZ(a) - p.getZ(b)) < 0.00001) parents[root(b)] = root(a);
+    }
+  }
+  const indices = [], a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let i = 0; i < geometry.index.count; i += 3) {
+    const ids = [0, 1, 2].map(j => root(geometry.index.getX(i + j)));
+    if (new Set(ids).size < 3) continue;
+    a.fromBufferAttribute(p, ids[0]); b.fromBufferAttribute(p, ids[1]); c.fromBufferAttribute(p, ids[2]);
+    if (b.sub(a).cross(c.sub(a)).lengthSq() > 1e-22) indices.push(...ids);
+  }
+  geometry.setIndex(indices); geometry.computeVertexNormals();
+  const compact = geometry.toNonIndexed();
+  geometry.dispose(); source.dispose(); return compact;
+}
+
+// The video shows hollow nozzle partitions and trailing-edge exits, unlike bucket bores.
+// Wall thickness, internal cavity contour and the 11-hole count are illustrative.
+export function cooledNozzleRow(parent, x, count, params, material) {
+  const original = bladeGeometry(params), cavity = nozzleCavity(params);
+  const ports = Array.from({length: 11}, (_, i) => cappedPort(params, 0.10 + i * 0.08, 0.0017));
+  const geometry = stabilizeNozzleCsg(subtractGeometry(original, [cavity, ...ports.map(port => port.geometry)]));
+  original.dispose(); cavity.dispose(); ports.forEach(port => port.geometry.dispose());
+  geometry.userData = {airfoil: true, csg: true, illustrative: true, nozzleCavity: true,
+    cavitySamples: [0.25, 0.50, 0.75].map(f => {
+      const center = airfoilPoint(params, 0.4, f), c = params.chord * (1 - 0.3 * f), angle = params.twist * (1 - 0.48 * f);
+      const u = 0.4, half = 5 * params.thickness * c * (0.2969 * Math.sqrt(u) - 0.126 * u - 0.3516 * u ** 2 + 0.2843 * u ** 3 - 0.1036 * u ** 4);
+      return {center, wall: [center[0] - 0.80 * half * Math.sin(angle), center[1], center[2] + 0.80 * half * Math.cos(angle)]};
+    }), trailingPorts: ports.map(port => port.points)};
+  const row = radialInstances(parent, geometry, material, x, count, TAU / count / 2);
+  row.userData = {csgAirfoil: true, nozzleCavity: true};
+  return row;
+}
+
+export function nozzleOuterPlatform(parent, x, params, vaneCount, segmentCount, material, coverMaterial, hasImpingementCover) {
+  const segmentAngle = TAU / segmentCount, vaneAngle = TAU / vaneCount, perSegment = vaneCount / segmentCount;
+  const holder = new THREE.Group();
+  const base = lathe(holder, [[-0.14, params.tip - 0.004], [-0.14, params.tip + 0.062],
+    [0.205, params.tip + 0.062], [0.205, params.tip - 0.004], [-0.14, params.tip - 0.004]], material, 12,
+  -Math.PI / 2 + 0.004, segmentAngle - 0.008);
+  const cavities = Array.from({length: perSegment}, (_, i) => nozzleCavity(params).rotateX((i + 0.5) * vaneAngle));
+  const platform = subtractGeometry(base.geometry, cavities);
+  base.geometry.dispose(); cavities.forEach(cavity => cavity.dispose());
+  platform.userData.nozzlePlatform = {
+    openings: Array.from({length: perSegment}, (_, i) => new THREE.Vector3(...airfoilPoint(params, 0.4, 1.1)).applyAxisAngle(new THREE.Vector3(1, 0, 0), (i + 0.5) * vaneAngle).toArray()),
+    wall: [-0.13, (params.tip + 0.03) * Math.cos(segmentAngle / 2), (params.tip + 0.03) * Math.sin(segmentAngle / 2)],
+    feedPaths: Array.from({length: perSegment}, (_, i) => (hasImpingementCover ? [0.25, 0.4, 0.55, 0.7] : [0.4]).map(u => {
+      const angle = (i + 0.5) * vaneAngle, end = 1 + 0.07 / (params.tip - params.root);
+      return {angle, points: Array.from({length: 25}, (_, j) => new THREE.Vector3(...airfoilPoint(params, u, 0.90 + j / 24 * (end - 0.90)))
+        .applyAxisAngle(new THREE.Vector3(1, 0, 0), angle).toArray())};
+    })).flat(),
+  };
+  radialInstances(parent, platform, material, x, segmentCount).userData.nozzlePlatform = true;
+  if (!hasImpingementCover) return;
+  const cover = lathe(holder, [[-0.08, params.tip + 0.063], [-0.08, params.tip + 0.069],
+    [0.22, params.tip + 0.069], [0.22, params.tip + 0.063], [-0.08, params.tip + 0.063]], coverMaterial, 12,
+  -Math.PI / 2 + 0.018, segmentAngle - 0.036);
+  const holes = [], holeCenters = [];
+  for (let i = 0; i < perSegment; i++) for (const u of [0.25, 0.40, 0.55, 0.70]) {
+    const f = 1 + 0.066 / (params.tip - params.root), point = airfoilPoint(params, u, f);
+    const bore = new THREE.CylinderGeometry(0.0025, 0.0025, 0.065, 10);
+    bore.translate(...point).rotateX((i + 0.5) * vaneAngle); holes.push(bore);
+    holeCenters.push(new THREE.Vector3(...point).applyAxisAngle(new THREE.Vector3(1, 0, 0), (i + 0.5) * vaneAngle).toArray());
+  }
+  const perforated = subtractGeometry(cover.geometry, holes);
+  cover.geometry.dispose(); holes.forEach(hole => hole.dispose());
+  perforated.userData.impingementCover = {holeCenters, radius: 0.0025};
+  radialInstances(parent, perforated, coverMaterial, x, segmentCount).userData.impingementCover = true;
+}
+
 export function hollowRod(parent, from, to, outer, inner, material, segments = 24) {
   const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to);
   const delta = b.clone().sub(a), length = delta.length();

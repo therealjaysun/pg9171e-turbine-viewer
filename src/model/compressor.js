@@ -145,6 +145,53 @@ function annularSegments(parent, x, radius, width, thickness, count, phase, mat,
   auditRole, {station: x, count});
 }
 
+function rotorRoots(parent, x, radius, count, phase, mat) {
+  const arc = TAU / count - 0.002;
+  const profile = [[-0.049, radius - 0.008], [-0.049, radius], [0.049, radius],
+    [0.049, radius - 0.008], [0.024, radius - 0.008], [0.024, radius - 0.016],
+    [0.036, radius - 0.029], [0.036, radius - 0.032], [-0.036, radius - 0.032],
+    [-0.036, radius - 0.029], [-0.024, radius - 0.016], [-0.024, radius - 0.008],
+    [-0.049, radius - 0.008]];
+  const prototype = lathe(new THREE.Group(), profile, mat, 12, -Math.PI / 2 - arc / 2, arc);
+  return mark(instances(parent, prototype.geometry, mat,
+    Array.from({length: count}, (_, i) => ({position: [x, 0, 0], rotation: [phase + TAU * i / count, 0, 0]}))),
+  'compressor-blade-platforms', {station: x, count, dovetail: true, geometryInferred: true, sourceTime: 204});
+}
+
+function squareStatorRoots(parent, x, radius, count, phase, mat) {
+  const shape = new THREE.Shape();
+  const profile = [[-0.022, -0.010], [0.022, -0.010], [0.022, 0.004], [0.026, 0.013],
+    [0.026, 0.025], [-0.026, 0.025], [-0.026, 0.013], [-0.022, 0.004]];
+  profile.forEach(([px, py], i) => i ? shape.lineTo(px, radius + py) : shape.moveTo(px, radius + py));
+  shape.closePath();
+  const width = TAU * radius / count * 0.86;
+  const geometry = new THREE.ExtrudeGeometry(shape, {depth: width, bevelEnabled: false});
+  geometry.translate(0, 0, -width / 2);
+  return mark(instances(parent, geometry, mat,
+    Array.from({length: count}, (_, i) => ({position: [x, 0, 0], rotation: [phase + TAU * i / count, 0, 0]}))),
+  'compressor-stator-dovetail-bases', {station: x, count, squareBase: true, geometryInferred: true, sourceTime: 544});
+}
+
+function pinionGeometry(teeth) {
+  const shape = new THREE.Shape();
+  for (let i = 0; i < teeth; i++) {
+    for (const [fraction, radius] of [[0, 0.045], [0.18, 0.045], [0.34, 0.052], [0.66, 0.052], [0.82, 0.045]]) {
+      const angle = TAU * (i + fraction) / teeth;
+      const point = [radius * Math.cos(angle), radius * Math.sin(angle)];
+      if (i === 0 && fraction === 0) shape.moveTo(...point);
+      else shape.lineTo(...point);
+    }
+  }
+  shape.closePath();
+  const bore = new THREE.Path();
+  bore.absarc(0, 0, 0.013, 0, TAU, true);
+  shape.holes.push(bore);
+  const geometry = new THREE.ExtrudeGeometry(shape, {depth: 0.030, bevelEnabled: false, curveSegments: 16});
+  geometry.translate(0, 0, -0.015);
+  geometry.rotateX(-Math.PI / 2);
+  return geometry;
+}
+
 export function buildCompressor(ctx) {
   const steel = material(palette.steel, 0.82, 0.31);
   const diskSteel = material(0x7e949c, 0.78, 0.36);
@@ -209,11 +256,14 @@ export function buildCompressor(ctx) {
     });
     wheelWeb(rotor, x, root - 0.045, diskSteel);
     const left = x - STAGE_PITCH / 2, right = x + STAGE_PITCH / 2;
-    mark(lathe(rotor, [[left, root - 0.045], [left, drumAt(left)], [x - 0.048, drumAt(x - 0.048)],
-      [x - 0.044, root - 0.021], [x + 0.044, root - 0.021], [x + 0.048, drumAt(x + 0.048)],
+    mark(lathe(rotor, [[left, root - 0.045], [left, drumAt(left)], [x - 0.050, drumAt(x - 0.050)],
+      [x - 0.050, root - 0.0085], [x - 0.0255, root - 0.0085], [x - 0.0255, root - 0.0155],
+      [x - 0.0375, root - 0.0285], [x - 0.0375, root - 0.0335], [x + 0.0375, root - 0.0335],
+      [x + 0.0375, root - 0.0285], [x + 0.0255, root - 0.0155], [x + 0.0255, root - 0.0085],
+      [x + 0.050, root - 0.0085], [x + 0.050, drumAt(x + 0.050)],
       [right, drumAt(right)], [right, root - 0.045], [left, root - 0.045]], diskSteel, 72),
     'compressor-drum-rim', {station: x, left, right, leftRadius: drumAt(left), rightRadius: drumAt(right)});
-    annularSegments(rotor, x, root, 0.098, 0.028, count, i * 0.015, steel, 'compressor-blade-platforms');
+    rotorRoots(rotor, x, root, count, i * 0.015, steel);
     mark(bladeRow(rotor, x, count, {root, tip, chord: 0.123 - ratio * 0.020, twist: 0.68 - ratio * 0.15, sweep: 0.015, thickness: 0.095, camber: 0.07, lean: 0.018}, bladeSteel, i * 0.015),
       'compressor-rotor-airfoil', {stage, station: x});
     rotors.push(rotor);
@@ -227,8 +277,8 @@ export function buildCompressor(ctx) {
     const sx = x + 0.112, outer = passageAt(sx);
     mark(bladeRow(stator, sx, count + 6, {root: drumAt(sx) + 0.012, tip: outer - 0.007, chord: 0.093 - ratio * 0.014, twist: -0.64, sweep: -0.006, thickness: 0.085, camber: -0.06}, statorSteel, 0.031),
       'compressor-stator-airfoil', {stage, station: sx, nominalDrumGap: 0.012});
-    annularSegments(stator, sx, outer + 0.027, 0.054, 0.036, stage <= 8 ? 8 : count + 6, 0.031,
-      statorSteel, stage <= 8 ? 'compressor-stator-carrier' : 'compressor-stator-dovetail-bases');
+    if (stage <= 8) annularSegments(stator, sx, outer + 0.027, 0.054, 0.036, 8, 0.031, statorSteel, 'compressor-stator-carrier');
+    else squareStatorRoots(stator, sx, outer, count + 6, 0.031, statorSteel);
   }
 
   const exitGuides = part(ctx, {
@@ -300,7 +350,7 @@ export function buildCompressor(ctx) {
   const guideVanes = part(ctx, {
     id: 'inlet-guide-vanes', name: '64 variable inlet guide vanes', system: 'inlet', kind: 'stator',
     description: 'Sixty-four inlet guide vanes meter compressor airflow. Pinion gears on the vane stems engage the circumferential control ring, moved by a hydraulic actuator.',
-    facts: [['Vanes', '64'], ['Opening range', '34-84 degrees'], ['Inner supports', '16 segments, four vanes each'], ['Geometry', 'Reconstructed at an intermediate opening']],
+    facts: [['Vanes', '64'], ['Opening range', '34-84 degrees'], ['Inner supports', '16 segments, four vanes each'], ['Geometry', 'Intermediate opening; gear tooth counts inferred']],
     explode: [-2.8, 0, 0], sourceTime: 244,
   });
   mark(bladeRow(guideVanes, -4.19, 64, {root: 0.575, tip: 1.105, chord: 0.170, twist: -0.28, sweep: 0.010, thickness: 0.09, camber: 0.035}, steel),
@@ -313,23 +363,29 @@ export function buildCompressor(ctx) {
   const outerSeat = ring(guideVanes, -4.19, 1.149, 0.120, 0.047, inletMaterial);
   outerSeat.geometry = subtractGeometry(outerSeat.geometry, [igvStemCuts]);
   mark(outerSeat, 'compressor-igv-stem-support', {boreCount: 64, stemRadius: 0.012, boreRadius: 0.014});
-  ring(guideVanes, -4.19, 1.279, 0.062, 0.046, bronze);
-  ring(guideVanes, -4.21, 1.309, 0.058, 0.03, steel);
-  const stems = [], pinions = [], teeth = [];
+  mark(ring(guideVanes, -4.119, 1.280, 0.020, 0.045, bronze), 'compressor-igv-control-ring', {geometryInferred: true});
+  ring(guideVanes, -4.115, 1.309, 0.030, 0.025, steel);
+  const stems = [], pinions = [], caps = [], rackTeeth = [];
   for (let i = 0; i < 64; i++) {
     const angle = TAU * i / 64;
     const rotation = [angle, 0, 0];
-    stems.push({position: [-4.19, 1.162 * Math.cos(angle), 1.162 * Math.sin(angle)], rotation});
-    pinions.push({position: [-4.19, 1.233 * Math.cos(angle), 1.233 * Math.sin(angle)], rotation});
-    for (let tooth = 0; tooth < 7; tooth++) {
-      const t = TAU * tooth / 7;
-      const tangent = Math.sin(t) * 0.054;
-      teeth.push({position: [-4.19 + Math.cos(t) * 0.054, 1.233 * Math.cos(angle) - tangent * Math.sin(angle), 1.233 * Math.sin(angle) + tangent * Math.cos(angle)], rotation: [angle, t, 0]});
-    }
+    stems.push({position: [-4.19, 1.180 * Math.cos(angle), 1.180 * Math.sin(angle)], rotation});
+    pinions.push({position: [-4.19, 1.255 * Math.cos(angle), 1.255 * Math.sin(angle)], rotation});
+    caps.push({position: [-4.19, 1.279 * Math.cos(angle), 1.279 * Math.sin(angle)], rotation});
   }
-  instances(guideVanes, new THREE.CylinderGeometry(0.012, 0.012, 0.20, 8), steel, stems);
-  instances(guideVanes, new THREE.CylinderGeometry(0.052, 0.052, 0.037, 14), bronze, pinions);
-  instances(guideVanes, new THREE.BoxGeometry(0.024, 0.039, 0.021), bronze, teeth);
+  // The video resolves fine teeth, not a manufacturing tooth count or gear law.
+  for (let i = 0; i < 768; i++) {
+    const angle = TAU * i / 768;
+    rackTeeth.push({position: [-4.1355, 1.255 * Math.cos(angle), 1.255 * Math.sin(angle)], rotation: [angle, 0, 0]});
+  }
+  instances(guideVanes, new THREE.CylinderGeometry(0.012, 0.012, 0.226, 12), steel, stems);
+  mark(instances(guideVanes, pinionGeometry(32), bronze, pinions), 'compressor-igv-pinion-gears',
+    {teethPerPinion: 32, toothCountInferred: true, sourceTime: 279});
+  const cap = ring(new THREE.Group(), 0, 0.037, 0.016, 0.024, bronze).geometry;
+  cap.rotateZ(Math.PI / 2);
+  mark(instances(guideVanes, cap, bronze, caps), 'compressor-igv-stem-caps', {geometryInferred: true});
+  mark(instances(guideVanes, new THREE.BoxGeometry(0.013, 0.030, 0.0024), bronze, rackTeeth),
+    'compressor-igv-rack-teeth', {toothCountInferred: true, sourceTime: 279});
   bolts(guideVanes, -4.298, 0.572, 16, 0.016, boltMaterial);
 
   const actuator = part(ctx, {

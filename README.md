@@ -2,7 +2,7 @@
 
 A local Three.js assembly viewer reconstructed from the supplied Oil Gas World PG9171E training video and public technical references. It models the historical three-stage turbine with DLN1 combustion, not the four-stage 9E.04 upgrade.
 
-![PG9171E refined exploded CAD view](exports/refined-exploded.jpg)
+![PG9171E R03 section view](exports/video-verified-section.jpg)
 
 ## Run
 
@@ -47,7 +47,7 @@ Section clipping affects the display only; exported mesh surfaces are uncut. The
 
 Verified architecture includes 17 compressor rotor/stator rows, 64 IGVs, two EGV rows, 14 DLN1 chambers, 6+1 injectors per chamber, three 92-bucket turbine wheels, 36/48/64 nozzle vanes, three bearing stations, 10 exhaust struts and five turning vanes. The 2161.5 mm compressor tip diameter is a published scale anchor. Most axial positions, wall profiles, airfoil sections, pipe routes and clearances are visual estimates. The 13-degree can inclination interprets the narrated wrapper face angle.
 
-This is not OEM CAD or a manufacturing-validated dimensional replica. The model is intended for visualization and further reconstruction. See the notes for details.
+This is not OEM CAD or a manufacturing-validated dimensional replica. The model is intended for visualization and further reconstruction. Direct video comparison still shows differences, including generic casing contours, simplified transition hardware, incomplete diaphragm plumbing/spacer slots and the exhaust cooling-annulus arrangement. See the notes for details.
 
 ## Verification
 
@@ -55,7 +55,9 @@ The model verification checks identifiers, finite geometry, source component cou
 
 Revision R02 audits all 110 selectable parts against timestamped video evidence. See [compressor and inlet](docs/audit-compressor.md), [combustion, turbine and exhaust](docs/audit-hot-section.md), and [bearings, shaft and supports](docs/audit-mechanics.md). Genuine open ports replace decorative hole markers; continuous rotor and diffuser geometry replaces missing sections. Running gaps and the representative airfoil cooling bores are deliberately labeled as reconstructed, not OEM dimensions.
 
-R02 export verification: 3,462,071 triangles, 110 named groups, GLB round-trip bounds preserved and no degenerate millimetre STL facets. The GLB is approximately 62 MB and the STL 173 MB; export can take a moment on mobile devices.
+R03 is a fresh direct-frame comparison, which found visible discrepancies not caught by the numerical checks. Corrections and unresolved differences are recorded separately for [compressor](docs/video-check-compressor.md), [combustion](docs/video-check-combustion.md), [turbine/exhaust](docs/video-check-turbine.md) and [bearings](docs/video-check-bearings.md). These records distinguish visible features from narrated counts and inferred dimensions; they do not claim that the model matches every frame.
+
+R03 export verification: 4,418,879 triangles, 110 named groups, GLB round-trip bounds preserved and no degenerate millimetre STL facets. The GLB is approximately 71 MB and the STL 221 MB; export can take a moment on mobile devices.
 
 Educational verification checks complete lesson sections and HTTPS references for every selectable part and system. Lessons distinguish the video configuration from general engineering context and do not supply unit-specific service limits.
 
