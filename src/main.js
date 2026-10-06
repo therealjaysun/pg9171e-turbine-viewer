@@ -5,17 +5,18 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { createIcons, icons } from 'lucide';
 import { buildAssembly, systems } from './model/assembly.js';
+import { createSectionCaps } from './section-caps.js';
 import './style.css';
 import { createEducationPanel } from './education/panel.js';
 
 const $ = id => document.getElementById(id);
 const icon = name => `<i data-lucide="${name}"></i>`;
 const refreshIcons = () => createIcons({icons,attrs:{'stroke-width':1.6}});
-const state = {view:'section',style:'shaded',explode:0,targetExplode:0,sectionAxis:'z',sectionPosition:0,sectionFlip:1,selected:null,selectedSystem:null,isolatedPart:null,hidden:new Set(),casings:true,rotors:true,supports:true,labels:true,flow:false,spinning:false,explodeAnimating:false,orthographic:false};
+const state = {view:'section',style:'shaded',explode:0,targetExplode:0,sectionAxis:'z',sectionPosition:0,sectionFlip:1,sectionFill:true,selected:null,selectedSystem:null,isolatedPart:null,hidden:new Set(),casings:true,rotors:true,supports:true,labels:true,flow:false,spinning:false,explodeAnimating:false,orthographic:false};
 const originalInspector=$('inspector').innerHTML;
 const container=$('canvas-container');
 const viewport=$('viewport');
-const renderer = new THREE.WebGLRenderer({antialias:true,alpha:false,preserveDrawingBuffer:true,powerPreference:'high-performance'});
+const renderer = new THREE.WebGLRenderer({antialias:true,alpha:false,stencil:true,preserveDrawingBuffer:true,powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.75));
 renderer.setClearColor(0xedf0ed);
 renderer.localClippingEnabled=true;
@@ -52,7 +53,7 @@ let camera=perspective;
 let controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.dampingFactor=.085;controls.minDistance=.5;controls.maxDistance=100;controls.maxPolarAngle=Math.PI*.94;
 let cameraTween=null,orthoScale=7;
-let assembly, educationPanel, materialRecords=[], edgeRecords=[], meshes=[], labels=[], lastTime=0, frame=0;
+let assembly, educationPanel, sectionCaps, materialRecords=[], edgeRecords=[], meshes=[], labels=[], lastTime=0, frame=0;
 const sectionPlane=new THREE.Plane(new THREE.Vector3(0,0,-1),0);
 const raycaster=new THREE.Raycaster();const pointer=new THREE.Vector2();
 const targetBox=new THREE.Box3();
@@ -131,9 +132,25 @@ function prepareMaterials() {
   }
 }
 
-let edgesBuilt=false;
+let edgeBuildIndex=0,edgesBuilding=false;
+function buildEdgesIncrementally() {
+  if(edgesBuilding||edgeBuildIndex===meshes.length)return;
+  edgesBuilding=true;
+  const batch=()=>{
+    const started=performance.now();
+    while(edgeBuildIndex<meshes.length&&performance.now()-started<10){
+      createEdges(meshes[edgeBuildIndex++]);
+      const edge=edgeRecords.at(-1);
+      edge.object.visible=state.style==='cad';
+      edge.material.clippingPlanes=state.view==='section'&&edge.system!=='supports'?[sectionPlane]:[];
+    }
+    if(edgeBuildIndex<meshes.length)requestAnimationFrame(batch);
+    else edgesBuilding=false;
+  };
+  requestAnimationFrame(batch);
+}
 function applyStyle() {
-  if(state.style==='cad'&&!edgesBuilt){for(const object of meshes)createEdges(object);edgesBuilt=true;}
+  if(state.style==='cad')buildEdgesIncrementally();
   for(const m of materialRecords) {
     const selected=state.selected===m.id||state.selectedSystem===m.system;
     m.mat.color.copy(m.base);m.mat.emissive.set(selected?0x316843:0);m.mat.emissiveIntensity=selected?.24:0;
@@ -154,6 +171,12 @@ function applySection() {
   sectionPlane.normal.copy(normal);sectionPlane.constant=state.sectionPosition/100*extent*state.sectionFlip;
   for(const m of materialRecords){m.mat.clippingPlanes=state.view==='section'&&m.system!=='supports'?[sectionPlane]:[];m.mat.clipShadows=true;}
   for(const e of edgeRecords)e.material.clippingPlanes=state.view==='section'&&e.system!=='supports'?[sectionPlane]:[];
+  $('section-fill').disabled=state.view!=='section'||state.style==='wire';
+}
+
+function updateSectionCaps() {
+  assembly.root.updateMatrixWorld(true);
+  sectionCaps.update({enabled:state.view==='section'&&state.sectionFill,style:state.style,selected:state.selected,selectedSystem:state.selectedSystem});
 }
 
 function applyVisibility() {
@@ -267,9 +290,12 @@ renderer.domElement.addEventListener('pointerdown',e=>{pointerDown=[e.clientX,e.
 renderer.domElement.addEventListener('pointerup',e=>{
   if(!pointerDown||Math.hypot(e.clientX-pointerDown[0],e.clientY-pointerDown[1])>5)return;
   const rect=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);
+  updateSectionCaps();
   raycaster.setFromCamera(pointer,camera);
   const hits=raycaster.intersectObjects(assembly.parts.filter(p=>p.group.visible).map(p=>p.group),true);
-  const hit=hits.find(h=>h.object.isMesh&&!h.object.userData.isEdge&&(state.view!=='section'||h.object.userData.system==='supports'||sectionPlane.distanceToPoint(h.point)>=0));
+  let hit=hits.find(h=>h.object.isMesh&&!h.object.userData.isEdge&&(state.view!=='section'||h.object.userData.system==='supports'||sectionPlane.distanceToPoint(h.point)>=-1e-7));
+  const capHit=sectionCaps.pick(raycaster);
+  if(capHit&&(!hit||capHit.distance<hit.distance))hit=capHit;
   selectPart(hit?.object.userData.partId||null);
 });
 
@@ -327,6 +353,7 @@ function bindControls() {
   $('section-axis').onchange=e=>{state.sectionAxis=e.target.value;state.sectionPosition=0;$('section-position').value=0;$('section-value').textContent='0%';$('view-subtitle').textContent=e.target.options[e.target.selectedIndex].text+' section';applySection();};
   $('section-position').oninput=e=>{state.sectionPosition=Number(e.target.value);$('section-value').textContent=`${e.target.value}%`;applySection();};
   $('section-flip').onclick=()=>{state.sectionFlip*=-1;applySection();};
+  $('section-fill').onchange=e=>{state.sectionFill=e.target.checked;};
   $('explode-amount').oninput=e=>{state.targetExplode=Number(e.target.value)/100;$('explode-value').textContent=`${e.target.value}%`;state.explodeAnimating=false;};
   $('explode-amount').onchange=()=>setTimeout(()=>fitCamera(null),400);
   $('explode-play').onclick=()=>{state.explodeAnimating=!state.explodeAnimating;$('explode-play').innerHTML=icon(state.explodeAnimating?'pause':'play');refreshIcons();};
@@ -344,7 +371,7 @@ function bindControls() {
   document.querySelectorAll('[data-export]').forEach(b=>b.onclick=()=>exportModel(b.dataset.export));
   $('menu-toggle').onclick=()=>$('assembly-panel').classList.toggle('open');
   $('fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await $('app').requestFullscreen();}catch{toast('Full screen is unavailable in this browser.');}};
-  $('screenshot').onclick=()=>{renderer.render(scene,camera);renderer.domElement.toBlob(blob=>{if(blob)download(blob,`pg9171e-${state.view}.png`);},'image/png');};
+  $('screenshot').onclick=()=>{updateSectionCaps();renderer.render(scene,camera);renderer.domElement.toBlob(blob=>{if(blob)download(blob,`pg9171e-${state.view}.png`);},'image/png');};
 }
 
 function animate(time) {
@@ -357,14 +384,17 @@ function animate(time) {
   if(state.flow){const pos=flowGroup.children[0].geometry.attributes.position;for(let i=0;i<14;i++)for(let j=0;j<30;j++){const t=(j/30+time*.000035)%1;flowCurves[i].getPointAt(t,tempVec);pos.setXYZ(i*30+j,tempVec.x,tempVec.y,tempVec.z);}pos.needsUpdate=true;}
   controls.update();
   if(state.selected&&selectionBox.visible){const p=assembly.parts.find(p=>p.id===state.selected);selectionBox.box.setFromObject(p.group);}
-  updateLabels();renderer.render(scene,camera);
-  if(frame%60===0)$('mesh-status').textContent=`${(renderer.info.render.triangles/1000).toFixed(0)}k TRIANGLES`;
+  updateLabels();updateSectionCaps();renderer.render(scene,camera);
+  if(frame%60===0){
+    $('mesh-status').textContent=`${(renderer.info.render.triangles/1000).toFixed(0)}k TRIANGLES`;
+    renderer.domElement.dataset.diagnostics=JSON.stringify(window.__turbineDiagnostics());
+  }
   requestAnimationFrame(animate);
 }
 
 try {
-  assembly=buildAssembly();educationPanel=createEducationPanel({systems,parts:assembly.parts});scene.add(assembly.root);prepareMaterials();buildLabels();buildFlow();renderTree();bindControls();applyStyle();resize();fitCamera([-.28,.32,1],true);refreshIcons();$('loading').hidden=true;
+  assembly=buildAssembly();educationPanel=createEducationPanel({systems,parts:assembly.parts});scene.add(assembly.root);prepareMaterials();sectionCaps=createSectionCaps({parts:assembly.parts,plane:sectionPlane});scene.add(sectionCaps.group);buildLabels();buildFlow();renderTree();bindControls();applyStyle();resize();fitCamera([-.28,.32,1],true);refreshIcons();$('loading').hidden=true;
   // Read-only diagnostics expose meaningful model and renderer state for verification.
-  window.__turbineDiagnostics=()=>({parts:assembly.parts.length,view:state.view,style:state.style,explosion:state.explode,spinning:state.spinning,visibleParts:assembly.parts.filter(p=>p.group.visible).length,triangles:renderer.info.render.triangles,drawCalls:renderer.info.render.calls,canvas:[renderer.domElement.width,renderer.domElement.height],camera:camera.position.toArray(),partIds:assembly.parts.map(p=>p.id),rotorAngle:assembly.rotors[0].rotation.x});
+  window.__turbineDiagnostics=()=>({parts:assembly.parts.length,view:state.view,style:state.style,explosion:state.explode,spinning:state.spinning,visibleParts:assembly.parts.filter(p=>p.group.visible).length,triangles:renderer.info.render.triangles,drawCalls:renderer.info.render.calls,canvas:[renderer.domElement.width,renderer.domElement.height],camera:camera.position.toArray(),partIds:assembly.parts.map(p=>p.id),rotorAngle:assembly.rotors[0].rotation.x,sectionCaps:sectionCaps.diagnostics()});
   requestAnimationFrame(animate);
 }catch(error){console.error(error);$('loading').innerHTML=`<span>Unable to build the turbine model.</span><span>${error.message}</span>`;}

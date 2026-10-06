@@ -73,6 +73,27 @@ Frame-by-frame findings and remaining deviations are recorded in `docs/video-che
 
 Known visible differences remain, including generic casing contours and ribs, simplified transition vent plates/support brackets, incomplete stage-2 diaphragm plumbing and spacer-face slots, and an incompletely separated exhaust structural-wall/cooling-annulus arrangement. The model is not visually identical to the video. Source-hidden cooling details and actual tolerances remain unverified. The simplified OpenSCAD source includes the combustion corrections but does not reproduce all browser-mesh gear, root, nozzle and bearing detail.
 
+## Revision R04 Filled Sections and Mesh Boundaries
+
+The browser now draws exposed material faces at its section plane while preserving
+actual cavities and flow passages. The Display panel's Filled section faces switch
+controls the effect; wireframe suppresses it. Cut faces select their underlying
+part, follow rotor/part motion and respect hiding and isolation. These are display
+helpers, not permanently cut geometry, and are excluded from GLB/STL exports.
+
+A complete tolerance-qualified mesh-boundary audit covers all 110 selectable parts
+and 823 source geometry objects. Repairs remove coincident sleeve/manifold seam
+walls, correct inward-wound inlet/transition/exhaust surfaces, replace a
+self-crossing diffuser profile with a finite-thickness turn, and stabilize tiny
+Boolean artifacts in cooled nozzles without closing their passages. The repository
+records the method and remaining limitations in `docs/mesh-topology-audit.md`.
+
+Closed mesh-boundary checks do not establish full assembly collision freedom,
+engineering clearances, OEM dimensions or CAD-solid validity. Boolean T-junctions
+are normalized for edge accounting in the audit, not remeshed into an exact
+indexed-manifold export. The simplified OpenSCAD model remains the R03 solid
+reconstruction; no B-rep/STEP conversion was performed in this revision.
+
 ## Editable Solid Source
 
 In `pg9171e.scad`, `exploded` is a 0-1 separation control, `cutaway` removes upper shell halves, and `show_casings`, `show_stators`, `show_base` and `component` control visibility. `component` accepts `all`, `inlet`, `compressor`, `combustion`, `turbine`, `exhaust` or `bearings` for separate solid export. Exact known populations remain present; reducing `$fn` changes tessellation only. The compressor rotor and stator blade populations are marked as estimated in the source.

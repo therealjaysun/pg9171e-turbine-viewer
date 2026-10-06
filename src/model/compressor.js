@@ -418,7 +418,7 @@ export function buildCompressor(ctx) {
     const lip = [[-4.78, 1.37], [-4.60, 1.31], [-4.45, 1.21], [-4.33, 1.12],
       [-4.253, 1.107], [-4.253, 1.152], [-4.127, 1.152], [-4.127, 1.109], [-4.10, passageAt(-4.10)],
       [-4.10, 1.22], [-4.31, 1.22], [-4.44, 1.29], [-4.60, 1.39], [-4.77, 1.44], [-4.78, 1.37]];
-    const bellmouth = splitCasing(inlet, lip, inletMaterial, {half});
+    const bellmouth = splitCasing(inlet, lip.reverse(), inletMaterial, {half});
     bellmouth.geometry = subtractGeometry(bellmouth.geometry, [igvStemCuts]);
     mark(bellmouth, 'compressor-inlet-bellmouth', {stemBores: 64});
     for (const side of [-1, 1]) for (const offset of [Math.PI / 8, 3 * Math.PI / 8]) {

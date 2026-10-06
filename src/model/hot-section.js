@@ -367,9 +367,9 @@ export function buildHotSection(ctx) {
     lug.rotation.x = angle;
     rod(transition, radial(1.49, 1.16, angle), radial(1.56, 1.24, angle), 0.03, mats.bolt, 6);
     lathe(transition, [[1.565, 0.752], [1.61, 0.752], [1.61, 0.768],
-      [1.565, 0.768], [1.565, 0.752]], mats.steel, 8, angle - Math.PI / 2 - TAU / 28, TAU / 14 - 0.018);
+      [1.565, 0.768], [1.565, 0.752]].reverse(), mats.steel, 8, angle - Math.PI / 2 - TAU / 28, TAU / 14 - 0.018);
     lathe(transition, [[1.565, 1.088], [1.61, 1.088], [1.61, 1.109],
-      [1.565, 1.109], [1.565, 1.088]], mats.steel, 8, angle - Math.PI / 2 - TAU / 28, TAU / 14 - 0.018);
+      [1.565, 1.109], [1.565, 1.088]].reverse(), mats.steel, 8, angle - Math.PI / 2 - TAU / 28, TAU / 14 - 0.018);
   }
 
   const services = part(ctx, {
@@ -452,11 +452,14 @@ export function buildHotSection(ctx) {
       explode: [stage * 0.66 + 0.08, 0.72, 0],
     });
     const nozzleX = x - [0.290, 0.315, 0.330][stage];
-    const nozzleBlades = stage < 2 ? cooledNozzleRow : bladeRow;
     const nozzleParams = {root: root + 0.006, tip: tip + 0.026,
       chord: stage === 0 ? 0.245 : 0.29, twist: -0.59, sweep: 0.10, thickness: 0.12,
       camber: -0.18, lean: -0.024};
-    nozzleBlades(nozzle, nozzleX, vaneCounts[stage], nozzleParams, stage === 0 ? mats.coating : mats.stator);
+    // Only the first-row Boolean mesh has the 20-micrometre numerical fin.
+    // Keep the second row's stable 10-micrometre cleanup to avoid new slivers.
+    if (stage < 2) cooledNozzleRow(nozzle, nozzleX, vaneCounts[stage], nozzleParams,
+      stage === 0 ? mats.coating : mats.stator, stage === 0 ? 0.00002 : 0.00001);
+    else bladeRow(nozzle, nozzleX, vaneCounts[stage], nozzleParams, mats.stator);
     if (stage < 2) nozzleOuterPlatform(nozzle, nozzleX, nozzleParams, vaneCounts[stage], stage ? 16 : 18,
       mats.stator, mats.steel, stage === 0);
     else turbineShroud(nozzle, nozzleX, tip + 0.047, 0.24, 16, mats.stator);
@@ -575,8 +578,8 @@ export function buildHotSection(ctx) {
       explode: [2.0, half === 'upper' ? 1.5 : -0.65, 0],
     });
     const shell = splitCasing(exhaustShell, [[3.35, 1.52], [3.35, 1.61], [4.28, 1.81],
-      [4.60, 1.94], [4.80, 2.13], [4.90, 2.38], [4.82, 2.38],
-      [4.73, 2.16], [4.55, 2.00], [4.24, 1.73], [3.35, 1.52]], mats.exhaust, {half});
+      [4.55, 1.94], [4.72, 2.13], [4.82, 2.38], [4.90, 2.38],
+      [4.797, 2.10], [4.60, 1.87], [4.30, 1.726], [3.35, 1.52]], mats.exhaust, {half});
     const sockets = [];
     for (let i = 0; i < 4; i++) {
       const a = Math.PI / 4 + i * TAU / 4;
@@ -608,7 +611,7 @@ export function buildHotSection(ctx) {
       [x + 0.43, radius + 0.17], [x + 0.455, radius + 0.33],
       [x + 0.426, radius + 0.33], [x + 0.40, radius + 0.18],
       [x + 0.32, radius + 0.09], [x + 0.18, radius + 0.035],
-      [x, radius + 0.028], [x, radius]], mats.steel, 96);
+      [x, radius + 0.028], [x, radius]].reverse(), mats.steel, 96);
   }
   turning.userData.clearances = {turningRings: 5, axialStagger: -0.11, radialPitch: 0.225,
     centerTunnelRadius: 0.69, outletRadii: [1.02, 1.245, 1.47, 1.695, 1.92]};

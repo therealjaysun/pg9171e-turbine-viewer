@@ -69,7 +69,17 @@ export function piercedSleeve(parent, {x0, x1, radius, thickness, holes = [], ma
     path.absellipse(hole.x, arc, hole.bore, hole.bore, 0, TAU, true);
     shape.holes.push(path);
   }
-  const geometry = refineCircumference(new THREE.ExtrudeGeometry(shape, {depth: thickness, bevelEnabled: false, curveSegments: 10}), radius * 0.16);
+  const developed = new THREE.ExtrudeGeometry(shape, {depth: thickness, bevelEnabled: false, curveSegments: 10});
+  const developedPositions = developed.getAttribute('position'), indices = [], circumference = TAU * radius;
+  // Rolling joins the two developed edges; their original sidewalls would become
+  // coincident internal faces, not part of the material's boundary.
+  for (let i = 0; i < developedPositions.count; i += 3) {
+    const ys = [0, 1, 2].map(j => developedPositions.getY(i + j));
+    if (ys.every(y => Math.abs(y) < 1e-6) || ys.every(y => Math.abs(y - circumference) < 1e-6)) continue;
+    indices.push(i, i + 1, i + 2);
+  }
+  developed.setIndex(indices);
+  const geometry = refineCircumference(developed, radius * 0.16);
   const p = geometry.getAttribute('position');
   for (let i = 0; i < p.count; i++) {
     const angle = p.getY(i) / radius + seam, r = radius - p.getZ(i);
@@ -198,7 +208,7 @@ function radialInstances(parent, geometry, material, x, count, phase = 0) {
   result.castShadow = true; result.receiveShadow = true; parent.add(result); return result;
 }
 
-function stabilizeNozzleCsg(source) {
+function stabilizeNozzleCsg(source, minimumEdge) {
   // Collapse micron-scale CSG intersection edges before Float32 millimetre export.
   // Neighbor faces share the replacement vertex; this does not punch out slivers.
   const positionsOnly = source.clone(); positionsOnly.deleteAttribute('normal');
@@ -209,16 +219,24 @@ function stabilizeNozzleCsg(source) {
     const ids = [0, 1, 2].map(j => geometry.index.getX(i + j));
     for (let j = 0; j < 3; j++) {
       const a = ids[j], b = ids[(j + 1) % 3];
-      if (Math.hypot(p.getX(a) - p.getX(b), p.getY(a) - p.getY(b), p.getZ(a) - p.getZ(b)) < 0.00001) parents[root(b)] = root(a);
+      if (Math.hypot(p.getX(a) - p.getX(b), p.getY(a) - p.getY(b), p.getZ(a) - p.getZ(b)) < minimumEdge) parents[root(b)] = root(a);
     }
   }
-  const indices = [], a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  const indices = [], faces = new Map(), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   for (let i = 0; i < geometry.index.count; i += 3) {
     const ids = [0, 1, 2].map(j => root(geometry.index.getX(i + j)));
     if (new Set(ids).size < 3) continue;
     a.fromBufferAttribute(p, ids[0]); b.fromBufferAttribute(p, ids[1]); c.fromBufferAttribute(p, ids[2]);
-    if (b.sub(a).cross(c.sub(a)).lengthSq() > 1e-22) indices.push(...ids);
+    if (b.sub(a).cross(c.sub(a)).lengthSq() <= 1e-22) continue;
+    const sorted = [...ids].sort((a,b)=>a-b), key = sorted.join(':');
+    const orientation = ids.indexOf(sorted[1]) === (ids.indexOf(sorted[0])+1)%3 ? 1 : -1;
+    const prior = faces.get(key);
+    // Edge collapse can leave an opposed pair forming a zero-thickness fin.
+    if (prior) {
+      if (prior.orientation !== orientation) faces.delete(key);
+    } else faces.set(key,{ids,orientation});
   }
+  for (const {ids} of faces.values()) indices.push(...ids);
   geometry.setIndex(indices); geometry.computeVertexNormals();
   const compact = geometry.toNonIndexed();
   geometry.dispose(); source.dispose(); return compact;
@@ -226,12 +244,12 @@ function stabilizeNozzleCsg(source) {
 
 // The video shows hollow nozzle partitions and trailing-edge exits, unlike bucket bores.
 // Wall thickness, internal cavity contour and the 11-hole count are illustrative.
-export function cooledNozzleRow(parent, x, count, params, material) {
+export function cooledNozzleRow(parent, x, count, params, material, minimumEdge = 0.00001) {
   const original = bladeGeometry(params), cavity = nozzleCavity(params);
   const ports = Array.from({length: 11}, (_, i) => cappedPort(params, 0.10 + i * 0.08, 0.0017));
-  const geometry = stabilizeNozzleCsg(subtractGeometry(original, [cavity, ...ports.map(port => port.geometry)]));
+  const geometry = stabilizeNozzleCsg(subtractGeometry(original, [cavity, ...ports.map(port => port.geometry)]), minimumEdge);
   original.dispose(); cavity.dispose(); ports.forEach(port => port.geometry.dispose());
-  geometry.userData = {airfoil: true, csg: true, illustrative: true, nozzleCavity: true,
+  geometry.userData = {airfoil: true, csg: true, illustrative: true, nozzleCavity: true, minimumEdge,
     cavitySamples: [0.25, 0.50, 0.75].map(f => {
       const center = airfoilPoint(params, 0.4, f), c = params.chord * (1 - 0.3 * f), angle = params.twist * (1 - 0.48 * f);
       const u = 0.4, half = 5 * params.thickness * c * (0.2969 * Math.sqrt(u) - 0.126 * u - 0.3516 * u ** 2 + 0.2843 * u ** 3 - 0.1036 * u ** 4);
