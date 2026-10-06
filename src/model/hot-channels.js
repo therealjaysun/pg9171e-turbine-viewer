@@ -101,9 +101,9 @@ function airfoilPoint(params, u, fraction) {
 }
 
 function coolingBore(params, u, radius) {
-  const n = 12, spans = 18, positions = [], indices = [];
+  const n = 12, spans = 28, positions = [], indices = [];
   for (let j = 0; j <= spans; j++) {
-    const f = -0.025 + j / spans * 1.05;
+    const f = -0.20 + j / spans * 1.34;
     const p = airfoilPoint(params, u, f);
     for (let k = 0; k < n; k++) positions.push(p[0] + radius * Math.cos(k * TAU / n), p[1], p[2] + radius * Math.sin(k * TAU / n));
   }
@@ -112,7 +112,7 @@ function coolingBore(params, u, radius) {
     indices.push(a, b + n, b, a, a + n, b + n);
   }
   for (const j of [0, spans]) {
-    const p = airfoilPoint(params, u, -0.025 + j / spans * 1.05), center = positions.length / 3;
+    const p = airfoilPoint(params, u, -0.20 + j / spans * 1.34), center = positions.length / 3;
     positions.push(...p);
     for (let k = 0; k < n; k++) {
       const a = j * n + k, b = j * n + (k + 1) % n;
@@ -125,22 +125,75 @@ function coolingBore(params, u, radius) {
   return result;
 }
 
+export function bucketCoolingPattern(stage) {
+  // Counts follow the identified Sulzer PG9171E-compatible replacement design.
+  // Bore diameters and locations are inferred, not that supplier's drawing.
+  const us = stage === 1 ? Array.from({length: 11}, (_, i) => 0.10 + i * 0.07)
+    : stage === 2 ? [0.14, 0.27, 0.40, 0.53, 0.66, 0.79] : [];
+  return us.map(u => ({u, radius: stage === 1 ? 0.00165 : 0.0020}));
+}
+
 export function cooledBladeRow(parent, x, count, params, material, phase = 0) {
   const original = bladeGeometry(params);
-  const cutters = [0.25, 0.50, 0.72].map(u => coolingBore(params, u, 0.0028));
-  const geometry = subtractGeometry(original, cutters);
+  const pattern = bucketCoolingPattern(params.coolingStage);
+  const cutters = pattern.map(({u, radius}) => coolingBore(params, u, radius));
+  const geometry = stabilizeNozzleCsg(subtractGeometry(original, cutters), 0.00001);
   original.dispose(); cutters.forEach(c => c.dispose());
-  geometry.userData = {csg: true, coolingPassages: 3, passageRadius: 0.0028, illustrative: true,
-    coolingPaths: [0.25, 0.50, 0.72].map(u => ({radius: 0.0028,
-      points: [0, 0.25, 0.50, 0.75, 1].map(f => airfoilPoint(params, u, f))}))};
-  const result = new THREE.InstancedMesh(geometry, material, count);
-  result.userData = {csgAirfoil: true, coolingPassages: 3};
-  const dummy = new THREE.Object3D();
-  for (let i = 0; i < count; i++) {
-    dummy.position.set(x, 0, 0); dummy.rotation.set(phase + i * TAU / count, 0, 0); dummy.updateMatrix(); result.setMatrixAt(i, dummy.matrix);
-  }
-  result.castShadow = true; result.receiveShadow = true; parent.add(result);
+  geometry.userData = {csg: true, coolingPassages: pattern.length, illustrative: true,
+    coolingReference: 'Sulzer E10255 PG9171E-compatible replacement buckets; not exact video/OEM drill pattern',
+    coolingPaths: pattern.map(({u, radius}) => ({u, radius,
+      points: [0, 0.25, 0.50, 0.75, 1].map(f => airfoilPoint(params, u, f)),
+      wallPoints: [0, 0.25, 0.50, 0.75, 1].map(f => {
+        const point = airfoilPoint(params, u, f), angle = params.twist * (1 - 0.48 * f);
+        return [point[0] - Math.sin(angle) * radius * 1.65, point[1], point[2] + Math.cos(angle) * radius * 1.65];
+      }),
+      assembledPoints: [-0.05, -0.015, 0, 0.01, 0.25, 0.50, 0.75, 1,
+        ...(params.coolingStage === 2 ? [1.015, 1.035, 1.055, 1.075, 1.09] : [1.01])].map(f => airfoilPoint(params, u, f))})),
+  };
+  const result = radialInstances(parent, geometry, material, x, count, phase);
+  result.userData = {csgAirfoil: true, coolingPassages: pattern.length};
   return result;
+}
+
+function piercedBucketBand(parent, x, count, params, profile, material, phase, role) {
+  const pitch = TAU / count, holder = new THREE.Group();
+  const base = lathe(holder, profile, material, 4, -Math.PI / 2 - pitch / 2, pitch);
+  base.geometry.computeBoundingBox();
+  const cutters = [];
+  for (const offset of [-2, -1, 0, 1, 2]) for (const {u, radius} of bucketCoolingPattern(params.coolingStage)) {
+    const cutter = coolingBore(params, u, radius).rotateX(offset * pitch);
+    cutter.computeBoundingBox();
+    if (cutter.boundingBox.intersectsBox(base.geometry.boundingBox)) cutters.push(cutter);
+    else cutter.dispose();
+  }
+  const geometry = stabilizeNozzleCsg(subtractGeometry(base.geometry, cutters), 0.00001);
+  base.geometry.dispose(); cutters.forEach(cutter => cutter.dispose());
+  geometry.userData = {csg: true, illustrative: true, bucketBand: role, coolingStage: params.coolingStage};
+  return radialInstances(parent, geometry, material, x, count, phase);
+}
+
+export function bucketRootBand(parent, x, count, params, material, phase = 0) {
+  const inner = params.root - 0.061, outer = params.root + 0.009;
+  const low = params.root - 0.040, high = params.root - 0.013;
+  // A sectioned collector and inward-open feed replace the formerly solid rim.
+  // This common gallery is a simplified equivalent of individual root plenums.
+  const profile = [[-0.1075, inner], [-0.1075, outer], [0.1075, outer], [0.1075, inner],
+    [0.047, inner], [0.047, low], [0.09, low], [0.09, high], [-0.09, high],
+    [-0.09, low], [0.023, low], [0.023, inner], [-0.1075, inner]];
+  const row = piercedBucketBand(parent, x, count, params, profile, material, phase, 'root-collector');
+  row.geometry.userData.rootCollector = {inner, outer, low, high, feedX: 0.035,
+    inferredGeometry: true, individualBucketPlenumsSimplified: true};
+  return row;
+}
+
+export function cooledBucketTipShroud(parent, x, count, params, material, phase = 0) {
+  const outer = params.tip + 0.032, inner = params.tip - 0.011, half = params.chord * 0.91 / 2;
+  piercedBucketBand(parent, x, count, params, [[0.02 - half, inner], [0.02 - half, outer],
+    [0.02 + half, outer], [0.02 + half, inner], [0.02 - half, inner]], material, phase, 'tip-shroud');
+  for (const center of [-0.035, 0.065]) piercedBucketBand(parent, x, count, params,
+    [[center - 0.007, params.tip + 0.008], [center - 0.007, params.tip + 0.04],
+      [center + 0.007, params.tip + 0.04], [center + 0.007, params.tip + 0.008],
+      [center - 0.007, params.tip + 0.008]], material, phase, 'tip-seal');
 }
 
 function nozzleCavity(params) {

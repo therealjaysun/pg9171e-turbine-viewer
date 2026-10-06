@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { lathe, hollowRod, hollowTube } from '../src/model/helpers.js';
 import { subtractGeometry } from '../src/model/csg.js';
+import { bucketCoolingPattern } from '../src/model/hot-channels.js';
 
 function closedSurface(geometry, label) {
   const p=geometry.attributes.position,index=geometry.index,edges=new Map();
@@ -24,6 +25,15 @@ function rayHits(object, origin, direction, far) {
 }
 
 export function verifyChannelTools() {
+  for (const [stage, count] of [[1, 11], [2, 6], [3, 0]]) {
+    const pattern = bucketCoolingPattern(stage);
+    assert.equal(pattern.length, count, `Stage ${stage}: replacement-reference cooling count`);
+    for (let i = 0; i < pattern.length; i++) {
+      assert.ok(pattern[i].radius > 0 && pattern[i].radius < 0.003, `Stage ${stage}: inferred bore radius`);
+      assert.ok(pattern[i].u > 0 && pattern[i].u < 1, `Stage ${stage}: passage must lie inside the chord`);
+      if (i) assert.ok(pattern[i].u > pattern[i - 1].u, `Stage ${stage}: passages must remain distinct`);
+    }
+  }
   const group=new THREE.Group(),mat=new THREE.MeshBasicMaterial({side:THREE.DoubleSide});
   const half=lathe(group,[[0,.8],[0,1],[1,1],[1,.8],[0,.8]],mat,32,0,Math.PI);
   closedSurface(half.geometry,'Split annular casing');

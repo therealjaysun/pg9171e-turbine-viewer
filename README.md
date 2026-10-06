@@ -2,7 +2,7 @@
 
 A local Three.js assembly viewer reconstructed from the supplied Oil Gas World PG9171E training video and public technical references. It models the historical three-stage turbine with DLN1 combustion, not the four-stage 9E.04 upgrade.
 
-![PG9171E R04 filled section view](exports/solid-section-desktop.png)
+![PG9171E R05 rotor cavity section](exports/rotor-cavities-desktop.png)
 
 ## Run
 
@@ -49,7 +49,7 @@ Section clipping and cap faces affect the display only; exported mesh surfaces a
 
 Verified architecture includes 17 compressor rotor/stator rows, 64 IGVs, two EGV rows, 14 DLN1 chambers, 6+1 injectors per chamber, three 92-bucket turbine wheels, 36/48/64 nozzle vanes, three bearing stations, 10 exhaust struts and five turning vanes. The 2161.5 mm compressor tip diameter is a published scale anchor. Most axial positions, wall profiles, airfoil sections, pipe routes and clearances are visual estimates. The 13-degree can inclination interprets the narrated wrapper face angle.
 
-This is not OEM CAD or a manufacturing-validated dimensional replica. The model is intended for visualization and further reconstruction. Direct video comparison still shows differences, including generic casing contours, simplified transition hardware, incomplete diaphragm plumbing/spacer slots and the exhaust cooling-annulus arrangement. See the notes for details.
+This is not OEM CAD or a manufacturing-validated dimensional replica. The model is intended for visualization and further reconstruction. Direct video comparison still shows differences, including generic casing contours, simplified transition hardware, incomplete diaphragm plumbing and the exhaust cooling-annulus arrangement. Spacer routes and shaft cavities are reconstructed, not recovered OEM contours. See the notes for details.
 
 ## Verification
 
@@ -68,3 +68,15 @@ R04 adds selectable, per-part winding-stencil section faces and repairs confirme
 Open `/tests/section-caps.html` on the local Vite server for the WebGL pixel regression suite. Its 89 assertions cover filled material versus bores, all section axes and flips, both projections, depth and selection against retained surfaces, support occlusion, overlapping parts, instances, hidden-part plane changes, styles and the fill toggle. These tests are local development fixtures, not production pages. CAD edge construction is incremental so the controls remain responsive while edges are prepared.
 
 The OpenSCAD source was evaluated successfully with the Manifold backend. Browser checks cover 1440px/1280px desktop and 390px/320px mobile rendering, CAD edges, projection, selection, isolation, clipping, motion, and file export. Canvas pixel checks confirmed nonblank desktop/mobile models and changing rotor pixels. Preview images are in `exports/`.
+
+### R05 Rotor and Cooling Refinement
+
+- Removed the continuous solid bar through the turbine wheel stack. Separate forward and aft wheel shafts now meet the bored wheels and spacers; an inferred aft pocket ends before the rear journal.
+- Preserved thick load-bearing metal around the openings. Closed mesh boundaries do not mean every interior region is filled with metal.
+- Replaced the three illustrative bucket bores with eleven stage-1 and six stage-2 spanwise passages, with reconstructed root feeds and outlets. These populations follow Sulzer's PG9171E-compatible replacement specification, not a verified OEM drawing for the video. Internal turbulators are omitted; stage 3 remains uncooled.
+- Added reconstructed spacer-face cooling routes. Shaft bore sizes, collector shapes, joint details and cooling distribution remain estimates; compressor extraction plumbing and the complete cooling circuit are not recovered.
+- Updated the part guides and [source notes](public/model-notes.md) to distinguish source-supported architecture from illustrative internal dimensions. The separate OpenSCAD file remains the earlier simplified reconstruction.
+
+R05 verification passes 12,001 assembled cavity probes and 86 material controls across all 7,826 mesh instances; all 826 source geometries pass the tolerance-qualified boundary audit. The new `/tests/rotor-cooling.html` fixture passes 347 WebGL pixel assertions for actual-model bucket bores, surrounding metal and rotor cavities at desktop/mobile sizes, alongside the existing 89 section-rendering assertions. Viewer checks cover CAD mode, rotor motion and mobile framing without horizontal page overflow.
+
+R05 mesh exports contain 5,708,019 triangles: GLB 73.29 MB and binary STL 285.40 MB. GLB round-trip scale, bounds and all 110 named groups pass, as do strict STL facet checks. These are visualization meshes, not a complete cooling-flow or structural model.

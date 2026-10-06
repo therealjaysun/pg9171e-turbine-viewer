@@ -12,6 +12,9 @@ The browser model is a detailed visualization mesh. The accompanying `pg9171e.sc
 4. [Baker Hughes Frame 9/1E](https://www.bakerhughes.com/gas-turbines/frame-technology/frame-91e). Confirms the single-shaft, hot-end-drive, 17-stage compressor, 14 reverse-flow combustors, and three turbine stages. Current product configurations and ratings are not necessarily those of the historical PG9171E video.
 5. [Baker Hughes Frame 9/1E brochure](https://qa.bakerhughes.com/sites/bakerhughes/files/2021-06/BakerHughes_Frame91E_Overview-060121.pdf). Lists a typical power-generation GT skid of 10.7 x 5.0 x 4.8 m. This is a package dimension, not an OEM flange-to-flange casing envelope; it is used only as an order-of-magnitude check.
 6. [Texas A&M Turbomachinery Laboratory, *LNG Turbomachinery*, 2011, page 11, Figure 18](https://turbolab.tamu.edu/wp-content/uploads/2018/08/Tutorial-04.pdf). Published by the symposium, with GE Oil & Gas co-authorship. Provides a Frame 9E section drawing showing the radial inlet, compressor, can-annular combustion zone, hot-end drive, and exhaust arrangement.
+7. [GE Vernova: 9E gas turbine family](https://www.gevernova.com/gas-power/products/gas-turbines/9e). The family includes PG9171E and later variants. The four-stage 9E.04 module is not the three-stage configuration reconstructed here.
+8. [Sulzer: GE MS9001E-equivalent buckets](https://www.sulzer.com/-/media/files/services/spare-parts/brochures/ge_ms9001e_equivalentbuckets_en_e10255_5_2014_web.pdf?sc_lang=en). Identifies PG9171E-compatible replacement buckets with eleven first-stage cooling holes (eight turbulated) and six second-stage holes. R05 uses these populations as a clearly labeled replacement-reference example, not proof of the exact OEM configuration in the video. Turbulators, passage diameters and coordinates are not recovered.
+9. [GE: development of the 9EMax](https://www.ge.com/news/reports/startup-power-plant-adapting-silicon-valley-methods-building-turbines). Distinguishes traditional radial bucket cooling channels from serpentine cooling introduced on the newer four-stage platform. R05 does not import that newer serpentine network.
 
 ## Video Evidence
 
@@ -61,7 +64,7 @@ The remaining profiles, axial stations, wall thicknesses, flange diameters, bolt
 
 All 110 selectable IDs were reviewed in three parallel subsystem audits against video frames and narration. Corrections include continuous compressor drum and EGV/discharge interfaces, pierced wheel webs and bleed ports, seven-opening can covers, open liner dilution/crossfire/metering holes, film-cooling slots, hollow round-to-sector transitions, turbine shrouds and wheel/spacer mating faces, nested exhaust-turning vanes, continuous shaft sections, separate thrust runner/pads, and open bearing oil passages.
 
-R02 used three illustrative spanwise bores in both cooled buckets and nozzle vanes. Direct frame comparison in R03 established that the visible nozzle topology differs: the nozzle vanes now have broad representative cavities, trailing-edge exits, and distinct outer-platform entries/covers. The rotating buckets retain representative spanwise bores. Exact cooling networks, hole populations and dimensions are not recovered from the video. Third-stage airfoils remain uncooled.
+R02 used three illustrative spanwise bores in both cooled buckets and nozzle vanes. Direct frame comparison in R03 established that the visible nozzle topology differs: the nozzle vanes now have broad representative cavities, trailing-edge exits, and distinct outer-platform entries/covers. R05 updates the rotating buckets using the replacement-reference populations above. Exact OEM cooling networks and dimensions are not recovered from the video. Third-stage airfoils remain uncooled.
 
 Per-part evidence and remaining differences are recorded in the repository's `docs/audit-compressor.md`, `docs/audit-hot-section.md` and `docs/audit-mechanics.md`. All numerical gaps are model checks, not service limits.
 
@@ -71,7 +74,7 @@ The supplied video was reopened and inspected at paused frames across the inlet/
 
 Frame-by-frame findings and remaining deviations are recorded in `docs/video-check-compressor.md`, `docs/video-check-combustion.md`, `docs/video-check-turbine.md` and `docs/video-check-bearings.md`. Visible features, narration-derived counts and inferred dimensions are distinguished. The video is the visual reference for this reconstruction, not dimensional proof of a manufactured PG9171E.
 
-Known visible differences remain, including generic casing contours and ribs, simplified transition vent plates/support brackets, incomplete stage-2 diaphragm plumbing and spacer-face slots, and an incompletely separated exhaust structural-wall/cooling-annulus arrangement. The model is not visually identical to the video. Source-hidden cooling details and actual tolerances remain unverified. The simplified OpenSCAD source includes the combustion corrections but does not reproduce all browser-mesh gear, root, nozzle and bearing detail.
+Known visible differences remain, including generic casing contours and ribs, simplified transition vent plates/support brackets, incomplete stage-2 diaphragm plumbing, and an incompletely separated exhaust structural-wall/cooling-annulus arrangement. R05 adds reconstructed spacer-face cooling routes, but their exact source contours remain unverified. The model is not visually identical to the video. Source-hidden cooling details and actual tolerances remain unverified. The simplified OpenSCAD source includes the combustion corrections but does not reproduce all browser-mesh gear, root, nozzle and bearing detail.
 
 ## Revision R04 Filled Sections and Mesh Boundaries
 
@@ -93,6 +96,33 @@ engineering clearances, OEM dimensions or CAD-solid validity. Boolean T-junction
 are normalized for edge accounting in the audit, not remeshed into an exact
 indexed-manifold export. The simplified OpenSCAD model remains the R03 solid
 reconstruction; no B-rep/STEP conversion was performed in this revision.
+
+## Revision R05 Rotor Cavities and Bucket Cooling
+
+The R04 section renderer correctly exposed the geometry provided to it, but its
+filled faces did not establish that every modeled volume was real metal. In
+particular, the continuous solid core through the turbine wheel stack was an
+unsupported simplification. R05 replaces it with separate forward and aft wheel
+shafts and leaves the central wheel/spacer openings unobstructed. Wheel webs,
+journals and shaft walls retain finite metal thickness. The forward opening and
+built-up assembly follow the video's 30:26-30:46 sequence; internal profiles and
+the extent of the aft cavity remain inferred, not OEM drawing dimensions.
+
+First- and second-stage buckets remain substantial metal airfoils around narrow
+spanwise passages, rather than empty shells. Their eleven/six passage populations
+follow the identified Sulzer replacement reference. Root collectors, feed openings,
+tip outlets and spacer routes are reconstructed to avoid blocked visual passages;
+their dimensions are educational estimates. A common annular collector stands in
+for individual bucket-root plenums, with six illustrative radial wheel feeds per
+cooled stage. Neither arrangement is asserted to reproduce OEM dovetail plumbing.
+Stage 3 remains internally uncooled.
+
+This is a partial internal reconstruction. Compressor extraction plumbing,
+metering restrictions, rotor joint seals, complete cooling distribution and
+internal turbulator details are not recovered. Passage checks establish openings
+in the modeled assembly, not validated flow rates, structural adequacy or an
+exact as-built cooling circuit. A section can miss a narrow passage and correctly
+show solid metal. The separate OpenSCAD reconstruction is unchanged by R05.
 
 ## Editable Solid Source
 

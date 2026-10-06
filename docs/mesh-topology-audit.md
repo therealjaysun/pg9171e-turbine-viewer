@@ -47,10 +47,34 @@ oriented volume after opposed-facet removal. This is numerical mesh stabilizatio
 not a claim about real nozzle cooling geometry. The existing cooling-path probes
 remain separate regression checks.
 
+## Rotor-cooling refinement
+
+The subsequent research-based geometry pass was checked independently with the
+same topology criteria, without loosening tolerances or filling working voids:
+
+- The former continuous filled turbine core is replaced by separate forward and
+  aft wheel shafts. The forward shaft has a finite-wall axial bore; the aft hub
+  has an inferred blind pocket and explicit floor before the solid rear journal.
+  Integral mating flanges retain twelve real through-stud bores each.
+- The three wheels and two spacers retain an open central bore. Six inferred
+  radial feeds in each of the first two wheels reach pierced, circumferential root
+  collectors. These are simplified common galleries, not recovered individual
+  OEM bucket plenums.
+- The first and second bucket rows use replacement-reference 11/6-hole counts,
+  with inferred hole sizes and routes. Matching passages continue through the
+  root bands and second-stage shroud/seal bands. Stage 3 remains uncooled.
+- Eighteen inferred spacer-face grooves connect their sampled entrances and
+  exits to the modeled voids. These are on both faces of the first spacer and the
+  forward face of the second spacer.
+
+The compressor-side supply connection is not recovered. A clear modeled partial
+path is not verification of the turbine's complete cooling circuit, real pressure
+distribution, or manufacturing geometry.
+
 ## Result
 
-- 110 selectable parts covered; 823 of 823 unique geometry objects pass.
-- 2,551,244 source triangles examined before instance expansion.
+- 110 selectable parts covered; 826 of 826 unique geometry objects pass.
+- 2,566,514 source triangles examined before instance expansion.
 - Zero normalized open edges, non-manifold edges, or winding disagreements.
 - Zero duplicate facets or original triangles below the area threshold.
 - Every geometry has positive total signed volume.
@@ -66,11 +90,29 @@ hollow tubes, preserved open lumens, and both cooled nozzle boundaries. Every fa
 of all 84 nozzle instances is also tested after actual station/angle transforms and
 Float32 millimetre conversion, using the strict STL export area threshold.
 
+`verifyAssembledMaterialVoids(model)`, called by the model verification, additionally
+checks the actual union of all 7,826 mesh instances. It does not trust the existence
+of a channel label as evidence of a void. Bounds select candidate material bodies;
+signed ray intersections then test their material winding individually, preserving
+the meaning of overlapping material bodies and hollow internal skins.
+
+This independent assembled check passes 12,001 void samples and 86 solid controls.
+It covers the shaft/stack core, the aft-pocket floor, every cooled bucket's
+collector/root and tip/shroud/seal interfaces, all radial wheel feeds and all
+spacer-face grooves. The representative full interior blade paths and their
+neighboring material walls are included. First-stage probes reach the tip gap;
+second-stage probes extend beyond the pierced seal at span fraction 1.09 while
+remaining below the stationary shroud. A further 1,640,224 transformed rotor,
+spacer and shaft facets pass the same Float32-mm area threshold as binary STL
+export, in addition to the independent nozzle fixtures.
+
 ## Limits
 
 This is a tolerance-qualified **mesh-boundary** result. It is not a complete
 self-intersection test, an exhaustive test of collisions between components, a
 Boolean union of the assembly, or an exact indexed-manifold export guarantee.
+The assembled probes are sampled checks of known routes, not an exhaustive
+collision or computational-fluid-dynamics test.
 The T-junction normalization exists in the audit, not as a remeshing operation on
 the export. Casings, liners, cooling passages and ducts intentionally retain their
 voids. The independent simplified OpenSCAD model is unchanged by these browser
