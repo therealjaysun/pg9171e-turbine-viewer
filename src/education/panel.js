@@ -1,7 +1,7 @@
 import { assemblyEducation, educationForPart, educationForSystem } from './index.js';
 import './panel.css';
 
-const tabs = ['operation', 'design', 'watch'];
+const tabs = ['operation', 'design', 'watch', 'manufacturing'];
 const headings = { operation: 'How it works', design: 'Design considerations', watch: 'In service' };
 
 function element(tag, text, className) {
@@ -9,6 +9,67 @@ function element(tag, text, className) {
   if (text) node.textContent = text;
   if (className) node.className = className;
   return node;
+}
+
+function sourceLink(reference, label = reference.label) {
+  const link = element('a', label);
+  link.href = reference.url;
+  link.target = '_blank';
+  link.rel = 'noreferrer';
+  return link;
+}
+
+function manufacturingRecord(record) {
+  const section = element('div', null, 'manufacturing-content');
+  section.append(element('p', record.scope, 'learning-summary'));
+  const citedKeys = [...new Set([...record.route, ...record.checks].flatMap(entry => entry.sources))];
+  for (const [field, heading] of [['route', 'Production route'], ['checks', 'Quality checks']]) {
+    section.append(element('h3', heading, 'learning-section-title'));
+    const list = element(field === 'route' ? 'ol' : 'ul', null, 'learning-prose manufacturing-steps');
+    for (const entry of record[field]) {
+      const item = element('li');
+      item.append(element('h4', entry.title), element('p', entry.text));
+      const citations = element('span', null, 'manufacturing-citations');
+      for (const key of entry.sources) {
+        const reference = record.references[key];
+        const number = citedKeys.indexOf(key) + 1;
+        const link = sourceLink(reference, `[${number}]`);
+        link.title = reference.label;
+        link.setAttribute('aria-label', `Source ${number}: ${reference.label}`);
+        citations.append(link);
+      }
+      item.append(citations);
+      list.append(item);
+    }
+    section.append(list);
+  }
+  section.append(element('h3', 'Evidence limits', 'learning-section-title'));
+  const limitations = element('ul', null, 'learning-prose');
+  for (const text of record.limitations) limitations.append(element('li', text));
+  section.append(limitations);
+  const sources = element('section', null, 'learning-sources');
+  sources.append(element('h3', 'Manufacturing sources', 'learning-section-title'));
+  for (const [index, key] of citedKeys.entries()) {
+    const reference = record.references[key];
+    sources.append(sourceLink(reference, `[${index + 1}] ${reference.label}`));
+  }
+  section.append(sources);
+  return section;
+}
+
+function manufacturingSection(notes) {
+  if (!notes.families) return manufacturingRecord(notes);
+  const section = element('div');
+  section.append(element('p', notes.scope, 'learning-summary'));
+  for (const family of notes.families) {
+    const details = element('details', null, 'manufacturing-family');
+    details.append(element('summary', family.title));
+    details.addEventListener('toggle', () => {
+      if (details.open && details.children.length === 1) details.append(manufacturingRecord(family.record));
+    });
+    section.append(details);
+  }
+  return section;
 }
 
 export function createEducationPanel({ systems, parts }) {
@@ -47,6 +108,11 @@ export function createEducationPanel({ systems, parts }) {
       section.setAttribute('aria-labelledby', `learning-tab-${tab}`);
       section.tabIndex = 0;
       section.hidden = activeTab !== tab;
+      if (tab === 'manufacturing') {
+        section.append(manufacturingSection(current.lesson.manufacturing));
+        content.append(section);
+        continue;
+      }
       if (tab === 'operation') {
         section.append(element('p', current.lesson.summary, 'learning-summary'));
         const insight = element('div', null, 'learning-insight');
@@ -70,12 +136,10 @@ export function createEducationPanel({ systems, parts }) {
       content.append(section);
     }
     const sources = element('section', null, 'learning-sources');
+    sources.id = 'learning-general-sources';
     sources.append(element('h3', 'Further reading', 'learning-section-title'));
     for (const reference of current.lesson.references) {
-      const link = element('a', reference.label);
-      link.href = reference.url;
-      link.target = '_blank';
-      link.rel = 'noreferrer';
+      const link = sourceLink(reference);
       const arrow = element('span', '\u2197');
       arrow.setAttribute('aria-hidden', 'true');
       link.append(arrow);
@@ -95,6 +159,7 @@ export function createEducationPanel({ systems, parts }) {
       button.tabIndex = active ? 0 : -1;
       document.getElementById(`learning-${button.dataset.lessonTab}`).hidden = !active;
     }
+    document.getElementById('learning-general-sources').hidden = tab === 'manufacturing';
     content.scrollTop = 0;
   }
 
