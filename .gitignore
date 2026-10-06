@@ -8,3 +8,6 @@ dist/
 exports/*.glb
 exports/*.stl
 exports/part-guide-motion.jpg
+exports/refined-motion-check.jpg
+.site-preview/
+.sites-runtime/

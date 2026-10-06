@@ -57,7 +57,7 @@ function bearingEducation(number) {
     keyIdea: details.keyIdea,
     operation: [details.operation, 'In normal hydrodynamic operation, shaft motion draws lubricant into a converging gap. Pressure developed in that oil film supports the journal rather than relying on dry metal-to-metal contact.'],
     design: [details.design, 'Oil viscosity, clearance, loading and speed jointly determine film behavior. Oil delivery also removes heat; simply supplying oil does not guarantee an adequate film under every condition.'],
-    watch: [details.watch, 'Start-up, coast-down and loss of lubrication require the installed machine\'s prescribed protections and procedures. This model omits the oil circuit, instrumentation and actual clearances.'],
+    watch: [details.watch, 'Start-up, coast-down and loss of lubrication require the installed machine\'s prescribed protections and procedures. Only partial oil and sealing passages are shown; external routing, instrumentation and true operating clearances are not modeled.'],
     references: [video(details.time), bearingReference]
   };
 }

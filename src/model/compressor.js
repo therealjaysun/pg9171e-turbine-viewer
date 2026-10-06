@@ -1,13 +1,28 @@
 import * as THREE from 'three';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   TAU, palette, material, part, mesh, cylinder, lathe, ring, box,
-  rod, tube, bolts, bladeRow, splitCasing,
+  rod, hollowTube, bolts, bladeRow, splitCasing,
 } from './helpers.js';
+import {subtractGeometry} from './csg.js';
 
 const FIRST_STAGE = -3.92;
 const LAST_STAGE = -0.68;
 const STAGE_PITCH = (LAST_STAGE - FIRST_STAGE) / 16;
 const TIP_RADIUS = 1.08075;
+
+const rootAt = x => 0.665 + 0.101 * (x - FIRST_STAGE) / (LAST_STAGE - FIRST_STAGE);
+const drumAt = x => rootAt(x) - 0.018;
+function passageAt(x) {
+  if (x <= LAST_STAGE) return TIP_RADIUS + 0.018 - 0.183 * (x - FIRST_STAGE) / (LAST_STAGE - FIRST_STAGE);
+  return TIP_RADIUS - 0.183 + 0.018 + 0.043 * (x - LAST_STAGE) / (-0.20 - LAST_STAGE);
+}
+
+function mark(object, auditRole, data = {}) {
+  object.name = auditRole;
+  Object.assign(object.userData, {auditRole, ...data});
+  return object;
+}
 
 function instances(parent, geometry, mat, placements) {
   const result = new THREE.InstancedMesh(geometry, mat, placements.length);
@@ -23,15 +38,6 @@ function instances(parent, geometry, mat, placements) {
   result.receiveShadow = true;
   parent.add(result);
   return result;
-}
-
-function splitFaces(parent, profile, mat) {
-  for (const side of [-1, 1]) {
-    const shape = new THREE.Shape(profile.map(([x, radius]) => new THREE.Vector2(x, side * radius)));
-    const geometry = new THREE.ShapeGeometry(shape);
-    geometry.rotateX(Math.PI / 2);
-    mesh(parent, geometry, mat);
-  }
 }
 
 function halfBolts(parent, x, radius, half, mat) {
@@ -60,23 +66,83 @@ function splitRails(parent, x0, x1, r0, r1, half, mat, boltMaterial) {
 }
 
 function casingProfile(x0, x1, r0, r1) {
+  const inside = [[x0, passageAt(x0)]];
+  for (const [left, right, depth] of [[-3.145, -3.035, 0.060], [-1.946, -1.84, 0.060]]) {
+    if (left <= x0 || right >= x1) continue;
+    inside.push([left, passageAt(left)], [left, passageAt(left) + depth],
+      [right, passageAt(right) + depth], [right, passageAt(right)]);
+  }
+  for (let i = 0; i < 17; i++) {
+    const x = FIRST_STAGE + STAGE_PITCH * i + 0.112;
+    if (x - 0.028 <= x0 || x + 0.028 >= x1) continue;
+    inside.push([x - 0.028, passageAt(x - 0.028)], [x - 0.028, passageAt(x) + 0.028],
+      [x + 0.028, passageAt(x) + 0.028], [x + 0.028, passageAt(x + 0.028)]);
+  }
+  if (x0 < LAST_STAGE && x1 > LAST_STAGE) inside.push([LAST_STAGE, passageAt(LAST_STAGE)]);
+  for (const x of [-0.435, -0.29]) {
+    if (x < x0 || x > x1) continue;
+    inside.push([x - 0.026, passageAt(x - 0.026)], [x - 0.026, passageAt(x) + 0.026],
+      [x + 0.026, passageAt(x) + 0.026], [x + 0.026, passageAt(x + 0.026)]);
+  }
+  inside.push([x1, passageAt(x1)]);
+  inside.sort((a, b) => a[0] - b[0]);
   return [
-    [x0, r0 - 0.08], [x0, r0 + 0.11], [x0 + 0.07, r0 + 0.11],
+    [x0, passageAt(x0)], [x0, r0 + 0.11], [x0 + 0.07, r0 + 0.11],
     [x0 + 0.09, r0], [x1 - 0.09, r1], [x1 - 0.07, r1 + 0.11],
-    [x1, r1 + 0.11], [x1, r1 - 0.08], [x0, r0 - 0.08],
+    [x1, r1 + 0.11], ...inside.reverse(),
   ];
 }
 
-function addBleedPort(parent, x, angle, radius, mat, boltMaterial, size = 0.095) {
-  const from = [x, radius * Math.cos(angle), radius * Math.sin(angle)];
-  const to = [x, (radius + 0.25) * Math.cos(angle), (radius + 0.25) * Math.sin(angle)];
-  rod(parent, from, to, size, mat, 20);
+function radialFrame(x, radius, angle) {
   const flange = new THREE.Group();
-  flange.position.set(...to);
+  flange.position.set(x, radius * Math.cos(angle), radius * Math.sin(angle));
   flange.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, Math.cos(angle), Math.sin(angle)));
-  ring(flange, 0, size * 1.62, 0.047, size * 0.7, mat, 32);
-  bolts(flange, 0.029, size * 1.25, 6, 0.018, boltMaterial);
+  return flange;
+}
+
+function bleedCut(x, angle, bore) {
+  const geometry = new THREE.CylinderGeometry(bore, bore, 1.0, 48, 1);
+  const frame = radialFrame(x, 1.2, angle);
+  geometry.rotateZ(-Math.PI / 2);
+  frame.updateMatrix();
+  geometry.applyMatrix4(frame.matrix);
+  return geometry;
+}
+
+function addBleedPort(parent, x, angle, radius, mat, boltMaterial, size = 0.095) {
+  const bore = size * 0.7;
+  const flange = radialFrame(x, radius, angle);
+  mark(lathe(flange, [[0, bore], [0, size], [0.228, size], [0.228, size * 1.62],
+    [0.275, size * 1.62], [0.275, bore], [0, bore]], mat, 48), 'compressor-bleed-duct', {bore, angle, station: x});
+  bolts(flange, 0.294, size * 1.25, 6, 0.018, boltMaterial);
   parent.add(flange);
+}
+
+function wheelWeb(parent, x, radius, mat) {
+  const shape = new THREE.Shape();
+  shape.absarc(0, 0, radius, 0, TAU, false);
+  for (const [y, z, r] of [[0, 0, 0.215], ...Array.from({length: 16}, (_, i) =>
+    [0.48 * Math.cos(TAU * i / 16), 0.48 * Math.sin(TAU * i / 16), 0.029])]) {
+    const hole = new THREE.Path();
+    hole.absarc(y, z, r, 0, TAU, true);
+    shape.holes.push(hole);
+  }
+  const geometry = new THREE.ExtrudeGeometry(shape, {depth: 0.07, bevelEnabled: false, curveSegments: 16});
+  geometry.rotateY(Math.PI / 2);
+  // In the rotated sketch plane, local X becomes -Z and local Y becomes Y.
+  geometry.rotateX(Math.PI / 2);
+  geometry.translate(x - 0.035, 0, 0);
+  return mark(mesh(parent, geometry, mat), 'compressor-wheel-web', {station: x, tieBoltHoles: 16, tieBoltBore: 0.029});
+}
+
+function annularSegments(parent, x, radius, width, thickness, count, phase, mat, auditRole) {
+  const arc = TAU / count - 0.002;
+  const prototype = lathe(new THREE.Group(), [[-width / 2, radius - thickness], [-width / 2, radius],
+    [width / 2, radius], [width / 2, radius - thickness], [-width / 2, radius - thickness]],
+  mat, 12, -Math.PI / 2 - arc / 2, arc);
+  return mark(instances(parent, prototype.geometry, mat,
+    Array.from({length: count}, (_, i) => ({position: [x, 0, 0], rotation: [phase + TAU * i / count, 0, 0]}))),
+  auditRole, {station: x, count});
 }
 
 export function buildCompressor(ctx) {
@@ -98,47 +164,58 @@ export function buildCompressor(ctx) {
     explode: [-1.0, -0.12, 0], sourceTime: 98,
   });
   rotors.push(assembly);
-  cylinder(assembly, -5.33, -4.52, 0.2, 0.2, steel, 64);
-  cylinder(assembly, -4.52, -4.05, 0.22, 0.62, diskSteel, 64);
-  ring(assembly, -5.2, 0.32, 0.09, 0.16, steel);
-  bolts(assembly, -5.25, 0.265, 12, 0.029, boltMaterial);
-  ring(assembly, -4.74, 0.335, 0.075, 0.145, steel);
-  for (const x of [-5.02, -4.94, -4.62]) ring(assembly, x, 0.225, 0.021, 0.034, darkSteel);
-  ring(assembly, -5.14, 0.356, 0.045, 0.07, darkSteel);
+  mark(cylinder(assembly, -5.75, -4.52, 0.2, 0.2, steel, 64), 'compressor-forward-journal', {radius: 0.2});
+  lathe(assembly, [[-4.52, 0.19], [-4.52, 0.20], [-4.31, 0.42], [-4.105, 0.545],
+    [-4.023, drumAt(-4.023)], [FIRST_STAGE - 0.035, 0.620], [FIRST_STAGE - 0.035, 0.19], [-4.52, 0.19]], diskSteel, 72);
+  ring(assembly, -5.64, 0.32, 0.09, 0.16, steel);
+  bolts(assembly, -5.70, 0.265, 12, 0.029, boltMaterial);
+  mark(ring(assembly, -5.22, 0.335, 0.075, 0.145, steel), 'compressor-thrust-runner', {station: -5.22, width: 0.075, radius: 0.335});
+  ring(assembly, -5.50, 0.356, 0.045, 0.17, darkSteel);
   instances(assembly, new THREE.BoxGeometry(0.057, 0.032, 0.017), steel,
     Array.from({length: 60}, (_, i) => {
       const angle = TAU * i / 60;
-      return {position: [-5.14, 0.361 * Math.cos(angle), 0.361 * Math.sin(angle)], rotation: [angle, 0, 0]};
+      return {position: [-5.50, 0.361 * Math.cos(angle), 0.361 * Math.sin(angle)], rotation: [angle, 0, 0]};
     }));
-  cylinder(assembly, -0.61, -0.37, 0.75, 0.38, diskSteel);
+  cylinder(assembly, LAST_STAGE + STAGE_PITCH / 2, -0.37, drumAt(LAST_STAGE + STAGE_PITCH / 2), 0.38, diskSteel);
   cylinder(assembly, -0.37, 0.14, 0.30, 0.22, steel);
   ring(assembly, 0.095, 0.4, 0.095, 0.2, steel);
   bolts(assembly, 0.151, 0.328, 16, 0.03, boltMaterial);
   for (let i = 0; i < 9; i++) ring(assembly, -0.365 + i * 0.033, 0.321, 0.012, 0.03, steel);
   for (let i = 0; i < 16; i++) {
     const angle = TAU * i / 16;
-    rod(assembly, [-4.07, 0.48 * Math.cos(angle), 0.48 * Math.sin(angle)], [-0.52, 0.48 * Math.cos(angle), 0.48 * Math.sin(angle)], 0.025, steel);
+    rod(assembly, [FIRST_STAGE - 0.035, 0.48 * Math.cos(angle), 0.48 * Math.sin(angle)], [LAST_STAGE + 0.035, 0.48 * Math.cos(angle), 0.48 * Math.sin(angle)], 0.025, steel);
   }
-  bolts(assembly, -4.08, 0.48, 16, 0.041, boltMaterial);
-  bolts(assembly, -0.53, 0.48, 16, 0.041, boltMaterial);
+  bolts(assembly, FIRST_STAGE - 0.055, 0.48, 16, 0.041, boltMaterial);
+  bolts(assembly, LAST_STAGE + 0.055, 0.48, 16, 0.041, boltMaterial);
+  for (let i = 0; i < 16; i++) {
+    const angle = TAU * (i + 0.5) / 16;
+    const vane = box(assembly, [0.044, 0.20, 0.012], [-0.782, 0.53 * Math.cos(angle), 0.53 * Math.sin(angle)], diskSteel);
+    vane.rotation.x = angle;
+    mark(vane, 'compressor-aft-cooling-fan', {bladeCountEstimated: true});
+  }
 
   for (let i = 0; i < 17; i++) {
     const stage = i + 1;
     const ratio = i / 16;
     const x = FIRST_STAGE + STAGE_PITCH * i;
-    const root = 0.665 + 0.101 * ratio;
+    const root = rootAt(x);
     const tip = TIP_RADIUS - 0.183 * ratio;
     const count = 48 + 4 * Math.floor(i / 2);
     const rotor = part(ctx, {
       id: `compressor-rotor-${stage}`, name: `Compressor rotor · stage ${String(stage).padStart(2, '0')}`, system: 'compressor', kind: 'rotor',
-      description: 'Cambered rotor airfoils accelerate the air. Individually modeled disk, blade platforms and spacer lands reproduce the visible assembly; airfoil profiles and per-row blade counts are approximate.',
+      description: 'Cambered rotor airfoils accelerate the air. The annular wheel web has sixteen actual tie-bolt bores; rim and spacer lands form a continuous rotor drum. Airfoil profiles, axial clearances and per-row blade counts remain reconstructed estimates.',
       facts: [['Stage', `${stage} of 17`], ['Row', 'Rotating'], ['Blade count', `${count} rendered / estimated`], ['Assembly', stage === 1 ? 'Forward stub integral wheel' : stage === 17 ? 'Aft stub integral wheel' : 'Individual wheel and spacers']],
       explode: [-2.4 + ratio * 2.5, 0, 0], sourceTime: 98,
     });
-    lathe(rotor, [[x - 0.07, 0.215], [x - 0.07, root - 0.11], [x - 0.045, root - 0.03], [x - 0.045, root], [x + 0.047, root], [x + 0.047, root - 0.03], [x + 0.075, root - 0.11], [x + 0.075, 0.215], [x - 0.07, 0.215]], diskSteel, 72);
-    ring(rotor, x, root + 0.012, 0.118, 0.025, steel, 72);
-    ring(rotor, x + 0.09, root - 0.014, 0.038, 0.035, steel, 72);
-    bladeRow(rotor, x, count, {root, tip, chord: 0.186 - ratio * 0.045, twist: 0.68 - ratio * 0.15, sweep: 0.027, thickness: 0.095, camber: 0.07, lean: 0.032}, bladeSteel, i * 0.015);
+    wheelWeb(rotor, x, root - 0.045, diskSteel);
+    const left = x - STAGE_PITCH / 2, right = x + STAGE_PITCH / 2;
+    mark(lathe(rotor, [[left, root - 0.045], [left, drumAt(left)], [x - 0.048, drumAt(x - 0.048)],
+      [x - 0.044, root - 0.021], [x + 0.044, root - 0.021], [x + 0.048, drumAt(x + 0.048)],
+      [right, drumAt(right)], [right, root - 0.045], [left, root - 0.045]], diskSteel, 72),
+    'compressor-drum-rim', {station: x, left, right, leftRadius: drumAt(left), rightRadius: drumAt(right)});
+    annularSegments(rotor, x, root, 0.098, 0.028, count, i * 0.015, steel, 'compressor-blade-platforms');
+    mark(bladeRow(rotor, x, count, {root, tip, chord: 0.123 - ratio * 0.020, twist: 0.68 - ratio * 0.15, sweep: 0.015, thickness: 0.095, camber: 0.07, lean: 0.018}, bladeSteel, i * 0.015),
+      'compressor-rotor-airfoil', {stage, station: x});
     rotors.push(rotor);
 
     const stator = part(ctx, {
@@ -147,9 +224,11 @@ export function buildCompressor(ctx) {
       facts: [['Stage', `${stage} of 17`], ['Row', 'Stationary'], ['Airfoil geometry', 'Reconstructed'], ['Mounting', stage <= 8 ? 'Dovetails in carrier ring segments' : 'Square-base dovetails in casing grooves']],
       explode: [-2.4 + ratio * 2.5 + 0.035, 0.0, 0], sourceTime: 520,
     });
-    bladeRow(stator, x + 0.112, count + 6, {root: root + 0.04, tip: tip + 0.045, chord: 0.151 - ratio * 0.025, twist: -0.64, sweep: -0.01, thickness: 0.085, camber: -0.06}, statorSteel, 0.031);
-    ring(stator, x + 0.112, tip + 0.075, 0.068, 0.037, statorSteel, 72);
-    if (stage === 17) ring(stator, x + 0.112, root + 0.065, 0.077, 0.033, darkSteel, 72);
+    const sx = x + 0.112, outer = passageAt(sx);
+    mark(bladeRow(stator, sx, count + 6, {root: drumAt(sx) + 0.012, tip: outer - 0.007, chord: 0.093 - ratio * 0.014, twist: -0.64, sweep: -0.006, thickness: 0.085, camber: -0.06}, statorSteel, 0.031),
+      'compressor-stator-airfoil', {stage, station: sx, nominalDrumGap: 0.012});
+    annularSegments(stator, sx, outer + 0.027, 0.054, 0.036, stage <= 8 ? 8 : count + 6, 0.031,
+      statorSteel, stage <= 8 ? 'compressor-stator-carrier' : 'compressor-stator-dovetail-bases');
   }
 
   const exitGuides = part(ctx, {
@@ -158,11 +237,15 @@ export function buildCompressor(ctx) {
     facts: [['Rows', '2'], ['Location', 'After compressor stage 17'], ['Geometry', 'Reconstructed shrouded vanes']],
     explode: [0.6, 0, 0], sourceTime: 548,
   });
-  for (const x of [-0.435, -0.29]) {
-    bladeRow(exitGuides, x, 80, {root: 0.785, tip: 0.943, chord: 0.13, twist: -0.2, thickness: 0.08, camber: 0.03}, statorSteel);
-    ring(exitGuides, x, 0.967, 0.058, 0.032, statorSteel);
-    ring(exitGuides, x, 0.803, 0.064, 0.03, darkSteel);
+  for (const [i, x] of [-0.435, -0.29].entries()) {
+    const inner = 0.777 + 0.022 * (x + 0.525) / 0.325 + 0.004, outer = passageAt(x);
+    mark(bladeRow(exitGuides, x, 80, {root: inner, tip: outer - 0.007, chord: 0.092, twist: -0.2, sweep: 0.005, thickness: 0.08, camber: 0.03}, statorSteel),
+      'compressor-egv-airfoil', {row: i + 1, station: x});
+    ring(exitGuides, x, outer + 0.025, 0.050, 0.034, statorSteel);
+    ring(exitGuides, x, inner + 0.004, 0.062, 0.026, darkSteel);
   }
+  mark(lathe(exitGuides, [[-0.525, 0.765], [-0.525, 0.777], [-0.20, 0.799],
+    [-0.20, 0.784], [-0.525, 0.765]], darkSteel), 'compressor-egv-inner-diffuser');
 
   const casingSections = [
     {key: 'forward', title: 'Forward compressor casing', x0: -4.10, x1: -3.17, r0: 1.22, r1: 1.176, stages: '1-4', time: 306, distance: -1.9},
@@ -174,13 +257,21 @@ export function buildCompressor(ctx) {
       const sign = half === 'upper' ? 1 : -1;
       const shell = part(ctx, {
         id: `compressor-casing-${section.key}-${half}`, name: `${section.title} · ${half}`, system: 'compressor', kind: 'casing',
-        description: 'Horizontally split, flange-bolted casing. Annular wall geometry includes radial end flanges and the machined horizontal joint.',
+        description: 'Horizontally split, flange-bolted casing with a tapered internal gas path, fitted stator-carrier recesses and open cooling/surge bleed ports. The fitted reconstruction removes gross component overlaps; it does not specify OEM running clearances.',
         facts: [['Stator stages', section.stages], ['Split', 'Horizontal'], ['Shell dimensions', 'Reconstructed from source proportions']],
         explode: [section.distance, sign * 1.75, 0], sourceTime: section.time,
       });
       const profile = casingProfile(section.x0, section.x1, section.r0, section.r1);
-      splitCasing(shell, profile, shellMaterial, {half});
-      splitFaces(shell, profile, shellMaterial);
+      const body = mark(splitCasing(shell, profile, shellMaterial, {half}), 'compressor-casing-wall', {section: section.key, half});
+      const ports = section.key === 'aft'
+        ? [-Math.PI / 4, Math.PI / 4].map(angle => ({x: -3.06, angle: angle + (half === 'upper' ? 0 : Math.PI), radius: 1.174, size: 0.095}))
+        : section.key === 'discharge'
+          ? [{x: -1.90, angle: half === 'upper' ? 0.55 : Math.PI + 0.55, radius: 1.106, size: 0.13}]
+          : [];
+      if (ports.length) {
+        body.geometry = subtractGeometry(body.geometry, ports.map(({x, angle, size}) => bleedCut(x, angle, size * 0.7)));
+        body.userData.ports = ports.map(({x, angle, size}) => ({station: x, angle, bore: size * 0.7}));
+      }
       splitRails(shell, section.x0 + 0.08, section.x1 - 0.08, section.r0 + 0.028, section.r1 + 0.028, half, shellMaterial, boltMaterial);
       halfBolts(shell, section.x0 - 0.019, section.r0 + 0.055, half, boltMaterial);
       halfBolts(shell, section.x1 + 0.019, section.r1 + 0.055, half, boltMaterial);
@@ -190,12 +281,7 @@ export function buildCompressor(ctx) {
         const ribProfile = [[x - 0.022, radius], [x - 0.022, radius + 0.043], [x + 0.022, radius + 0.043], [x + 0.022, radius], [x - 0.022, radius]];
         splitCasing(shell, ribProfile, shellMaterial, {half});
       }
-      if (section.key === 'aft') {
-        for (const angle of [-Math.PI / 4, Math.PI / 4]) {
-          addBleedPort(shell, -3.06, angle + (half === 'upper' ? 0 : Math.PI), 1.174, inletMaterial, boltMaterial);
-        }
-      }
-      if (section.key === 'discharge') addBleedPort(shell, -1.90, half === 'upper' ? 0.55 : Math.PI + 0.55, 1.106, inletMaterial, boltMaterial, 0.13);
+      for (const {x, angle, radius, size} of ports) addBleedPort(shell, x, angle, radius, inletMaterial, boltMaterial, size);
       if (section.key === 'forward' && half === 'lower') {
         for (const side of [-1, 1]) {
           rod(shell, [-3.83, -0.19, side * 1.15], [-3.83, -0.19, side * 1.53], 0.12, darkSteel, 24);
@@ -217,9 +303,16 @@ export function buildCompressor(ctx) {
     facts: [['Vanes', '64'], ['Opening range', '34-84 degrees'], ['Inner supports', '16 segments, four vanes each'], ['Geometry', 'Reconstructed at an intermediate opening']],
     explode: [-2.8, 0, 0], sourceTime: 244,
   });
-  bladeRow(guideVanes, -4.19, 64, {root: 0.575, tip: 1.105, chord: 0.205, twist: -0.48, thickness: 0.09, camber: 0.035}, steel);
-  ring(guideVanes, -4.19, 0.603, 0.25, 0.075, darkSteel);
-  ring(guideVanes, -4.19, 1.148, 0.235, 0.035, inletMaterial);
+  mark(bladeRow(guideVanes, -4.19, 64, {root: 0.575, tip: 1.105, chord: 0.170, twist: -0.28, sweep: 0.010, thickness: 0.09, camber: 0.035}, steel),
+    'compressor-igv-airfoil', {station: -4.19});
+  for (let i = 0; i < 16; i++) {
+    mark(lathe(guideVanes, [[-4.28, 0.558], [-4.28, 0.584], [-4.10, 0.584], [-4.10, 0.558], [-4.28, 0.558]],
+      darkSteel, 12, TAU * i / 16 + 0.0015, TAU / 16 - 0.003), 'compressor-igv-inner-segment', {segment: i + 1});
+  }
+  const igvStemCuts = mergeGeometries(Array.from({length: 64}, (_, i) => bleedCut(-4.19, TAU * i / 64, 0.014)), false);
+  const outerSeat = ring(guideVanes, -4.19, 1.149, 0.120, 0.047, inletMaterial);
+  outerSeat.geometry = subtractGeometry(outerSeat.geometry, [igvStemCuts]);
+  mark(outerSeat, 'compressor-igv-stem-support', {boreCount: 64, stemRadius: 0.012, boreRadius: 0.014});
   ring(guideVanes, -4.19, 1.279, 0.062, 0.046, bronze);
   ring(guideVanes, -4.21, 1.309, 0.058, 0.03, steel);
   const stems = [], pinions = [], teeth = [];
@@ -237,7 +330,7 @@ export function buildCompressor(ctx) {
   instances(guideVanes, new THREE.CylinderGeometry(0.012, 0.012, 0.20, 8), steel, stems);
   instances(guideVanes, new THREE.CylinderGeometry(0.052, 0.052, 0.037, 14), bronze, pinions);
   instances(guideVanes, new THREE.BoxGeometry(0.024, 0.039, 0.021), bronze, teeth);
-  bolts(guideVanes, -4.32, 0.574, 16, 0.022, boltMaterial);
+  bolts(guideVanes, -4.298, 0.572, 16, 0.016, boltMaterial);
 
   const actuator = part(ctx, {
     id: 'igv-actuator', name: 'IGV hydraulic actuator & linkage', system: 'inlet', kind: 'detail',
@@ -248,7 +341,10 @@ export function buildCompressor(ctx) {
   rod(actuator, [-4.05, -0.42, 1.25], [-4.25, -0.15, 1.25], 0.035, steel, 16);
   box(actuator, [0.14, 0.16, 0.2], [-4.20, -0.19, 1.25], steel);
   box(actuator, [0.3, 0.15, 0.22], [-3.64, -0.99, 1.25], shellMaterial);
-  tube(actuator, [[-3.68, -0.82, 1.31], [-3.47, -0.77, 1.31], [-3.4, -1.12, 1.31]], 0.016, darkSteel, 16);
+  const mountAngle = Math.atan2(1.25, -0.99);
+  const mount = box(actuator, [0.25, 0.42, 0.10], [-3.64, 1.41 * Math.cos(mountAngle), 1.41 * Math.sin(mountAngle)], shellMaterial);
+  mount.rotation.x = mountAngle;
+  for (const z of [1.29, 1.34]) hollowTube(actuator, [[-3.68, -0.82, z], [-3.47, -0.77, z], [-3.4, -1.12, z]], 0.016, 0.004, darkSteel, 16);
 
   for (const half of ['upper', 'lower']) {
     const sign = half === 'upper' ? 1 : -1;
@@ -258,24 +354,36 @@ export function buildCompressor(ctx) {
       facts: [['Inlet type', 'Radial collector'], ['Supports', 'No. 1 bearing and variable IGVs'], ['Envelope', 'Reconstructed from section references']],
       explode: [-3.1, sign * 1.6, 0], sourceTime: 244,
     });
-    const frontPlate = [[-5.21, 0.27], [-5.21, 1.38], [-5.10, 1.38], [-5.10, 0.29], [-5.21, 0.27]];
-    splitCasing(inlet, frontPlate, inletMaterial, {half});
-    splitFaces(inlet, frontPlate, inletMaterial);
-    const turningWall = [[-5.1, 0.94], [-4.96, 0.84], [-4.78, 0.71], [-4.55, 0.62], [-4.28, 0.575], [-4.28, 0.53], [-4.56, 0.57], [-4.8, 0.655], [-4.99, 0.79], [-5.1, 0.88], [-5.1, 0.94]];
-    splitCasing(inlet, turningWall, steel, {half});
-    splitFaces(inlet, turningWall, steel);
-    const lip = [[-4.78, 1.37], [-4.60, 1.31], [-4.45, 1.21], [-4.33, 1.12], [-4.10, 1.12], [-4.10, 1.22], [-4.31, 1.22], [-4.44, 1.29], [-4.60, 1.39], [-4.77, 1.44], [-4.78, 1.37]];
-    splitCasing(inlet, lip, inletMaterial, {half});
-    splitFaces(inlet, lip, inletMaterial);
+    const frontPlate = [[-5.21, 0.465], [-5.21, 1.38], [-5.10, 1.38], [-5.10, 0.465], [-5.21, 0.465]];
+    mark(splitCasing(inlet, frontPlate, inletMaterial, {half}), 'compressor-inlet-front-plate', {bore: 0.465});
+    const turningWall = [[-5.1, 0.94], [-4.96, 0.84], [-4.78, 0.71], [-4.55, 0.62], [-4.28, 0.584],
+      [-4.28, 0.558], [-4.56, 0.57], [-4.8, 0.655], [-4.99, 0.79], [-5.1, 0.88], [-5.1, 0.94]];
+    mark(splitCasing(inlet, turningWall, steel, {half}), 'compressor-inlet-inner-turning-wall');
+    const lip = [[-4.78, 1.37], [-4.60, 1.31], [-4.45, 1.21], [-4.33, 1.12],
+      [-4.253, 1.107], [-4.253, 1.152], [-4.127, 1.152], [-4.127, 1.109], [-4.10, passageAt(-4.10)],
+      [-4.10, 1.22], [-4.31, 1.22], [-4.44, 1.29], [-4.60, 1.39], [-4.77, 1.44], [-4.78, 1.37]];
+    const bellmouth = splitCasing(inlet, lip, inletMaterial, {half});
+    bellmouth.geometry = subtractGeometry(bellmouth.geometry, [igvStemCuts]);
+    mark(bellmouth, 'compressor-inlet-bellmouth', {stemBores: 64});
+    for (const side of [-1, 1]) for (const offset of [Math.PI / 8, 3 * Math.PI / 8]) {
+      const angle = side * offset + (half === 'upper' ? 0 : Math.PI);
+      const rib = box(inlet, [0.28, 0.20, 0.038], [-4.59, 1.39 * Math.cos(angle), 1.39 * Math.sin(angle)], inletMaterial);
+      rib.rotation.x = angle;
+      mark(rib, 'compressor-inlet-external-rib', {populationEstimated: true});
+    }
     halfBolts(inlet, -5.232, 1.305, half, boltMaterial);
     splitRails(inlet, -5.2, -4.15, 1.35, 1.26, half, inletMaterial, boltMaterial);
     for (const side of [-1, 1]) {
-      const strut = box(inlet, [0.66, 0.10, 0.67], [-4.88, sign * 0.35, side * 0.99], inletMaterial);
-      strut.rotation.x = side * sign * 0.34;
+      const angle = half === 'upper' ? side * Math.PI / 4 : Math.PI + side * Math.PI / 4;
+      const r0 = 0.438, r1 = 1.38;
+      const strut = box(inlet, [0.165, r1 - r0, 0.046],
+        [-4.88, (r0 + r1) / 2 * Math.cos(angle), (r0 + r1) / 2 * Math.sin(angle)], inletMaterial);
+      strut.rotation.x = angle;
+      mark(strut, 'compressor-inlet-bearing-strap', {innerRadius: r0, outerRadius: r1});
     }
     if (half === 'lower') {
       box(inlet, [0.29, 0.29, 0.57], [-5.02, -1.40, 0], inletMaterial);
-      tube(inlet, [[-5.03, -1.44, 0], [-5.03, -1.62, 0], [-4.77, -1.62, 0]], 0.044, darkSteel, 16);
+      hollowTube(inlet, [[-5.03, -1.44, 0], [-5.03, -1.62, 0], [-4.77, -1.62, 0]], 0.044, 0.008, darkSteel, 16);
     }
   }
 

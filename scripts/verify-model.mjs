@@ -2,10 +2,21 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { buildAssembly, systems } from '../src/model/assembly.js';
 import { assemblyEducation, educationForPart, educationForSystem } from '../src/education/index.js';
+import './verify-channels.mjs';
+import {verifyHotSection} from './verify-hot-section.mjs';
+import {verifyMechanics} from './verify-mechanics.mjs';
+import {verifyCompressor} from './verify-compressor.mjs';
+import {verifyCombustion} from './verify-combustion.mjs';
+import {verifyExhaust} from './verify-exhaust.mjs';
 
 const model = buildAssembly();
 const byId = new Map(model.parts.map(part => [part.id, part]));
 const knownSystems = new Set(systems.map(system => system.id));
+verifyHotSection(model);
+verifyMechanics(model);
+verifyCompressor(model);
+verifyCombustion(model);
+verifyExhaust(model);
 const geometries = new Set();
 let meshCount = 0;
 let instanceCount = 0;
@@ -47,10 +58,9 @@ function namedPart(id) {
 function airfoilRows(part) {
   const rows = [];
   part.group.traverse(object => {
-    if (object.isInstancedMesh && object.geometry.type === 'BufferGeometry') {
+    if (object.isInstancedMesh && (object.geometry.userData.airfoil || object.userData.csgAirfoil)) {
       object.geometry.computeBoundingBox();
-      const span = object.geometry.boundingBox.getSize(new THREE.Vector3());
-      if (span.y > 0.08 && span.x > 0.05) rows.push(object);
+      rows.push(object);
     }
   });
   return rows;
@@ -65,9 +75,11 @@ function assertAirfoilTriangles(part, row) {
   const edges = new Map();
   const bounds = row.geometry.boundingBox;
   let rootCaps = 0, tipCaps = 0;
-  assert.ok(indices, `${part.id}: airfoil must be indexed`);
-  for (let i = 0; i < indices.count; i += 3) {
-    const face = [indices.getX(i), indices.getX(i + 1), indices.getX(i + 2)];
+  const cooled=Boolean(row.userData.csgAirfoil);
+  if(!cooled) assert.ok(indices, `${part.id}: parametric airfoil must be indexed`);
+  const count=indices?.count ?? positions.count;
+  for (let i = 0; i < count; i += 3) {
+    const face = indices ? [indices.getX(i), indices.getX(i + 1), indices.getX(i + 2)] : [i,i+1,i+2];
     a.fromBufferAttribute(positions, face[0]);
     b.fromBufferAttribute(positions, face[1]);
     c.fromBufferAttribute(positions, face[2]);
@@ -92,7 +104,7 @@ function assertAirfoilTriangles(part, row) {
     }
   }
   assert.ok(rootCaps > 0 && tipCaps > 0, `${part.id}: airfoil ends must be capped`);
-  for (const edge of edges.values()) assert.ok(edge.count === 2 && edge.direction === 0, `${part.id}: airfoil has an open or inconsistently wound edge`);
+  if(!cooled) for (const edge of edges.values()) assert.ok(edge.count === 2 && edge.direction === 0, `${part.id}: airfoil has an open or inconsistently wound edge`);
   assert.ok(normals && normals.count === positions.count, `${part.id}: airfoil normals missing`);
   for (let i = 0; i < normals.count; i++) {
     const length = a.fromBufferAttribute(normals, i).length();

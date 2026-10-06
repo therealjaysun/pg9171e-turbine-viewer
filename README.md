@@ -2,7 +2,7 @@
 
 A local Three.js assembly viewer reconstructed from the supplied Oil Gas World PG9171E training video and public technical references. It models the historical three-stage turbine with DLN1 combustion, not the four-stage 9E.04 upgrade.
 
-![PG9171E section view with the educational part guide](exports/part-guide-desktop.jpg)
+![PG9171E refined exploded CAD view](exports/refined-exploded.jpg)
 
 ## Run
 
@@ -51,7 +51,11 @@ This is not OEM CAD or a manufacturing-validated dimensional replica. The model 
 
 ## Verification
 
-The model verification checks identifiers, finite geometry, source component counts, instance transforms, airfoil triangle area, unit normals, cap orientation and closed airfoil edges. It also checks assembled/exploded bounds and restoration. The export script generates both mesh files and verifies a GLB round trip, component counts, scale, bounds and all STL facets. The final exports contain 1,156,368 triangles with no degenerate facets; this does not imply that the whole assembly is a single watertight solid.
+The model verification checks identifiers, finite geometry, source component counts, instance transforms, airfoil triangle area, unit normals, cap orientation and closed parametric airfoil edges. It also checks assembled/exploded bounds and restoration, pierced-channel geometry, cooling-bore voids and surrounding walls, rotor/stator axial separation, journal and seal clearances, thrust faces and housing drains. The export script generates both mesh files and verifies a GLB round trip, component counts, scale, bounds and STL facets. These targeted checks are not a universal collision or watertight-solid certificate.
+
+Revision R02 audits all 110 selectable parts against timestamped video evidence. See [compressor and inlet](docs/audit-compressor.md), [combustion, turbine and exhaust](docs/audit-hot-section.md), and [bearings, shaft and supports](docs/audit-mechanics.md). Genuine open ports replace decorative hole markers; continuous rotor and diffuser geometry replaces missing sections. Running gaps and the representative airfoil cooling bores are deliberately labeled as reconstructed, not OEM dimensions.
+
+R02 export verification: 3,462,071 triangles, 110 named groups, GLB round-trip bounds preserved and no degenerate millimetre STL facets. The GLB is approximately 62 MB and the STL 173 MB; export can take a moment on mobile devices.
 
 Educational verification checks complete lesson sections and HTTPS references for every selectable part and system. Lessons distinguish the video configuration from general engineering context and do not supply unit-specific service limits.
 
