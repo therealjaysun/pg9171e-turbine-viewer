@@ -1,7 +1,9 @@
 import { assemblyEducation, educationForPart, educationForSystem } from './index.js';
 import './panel.css';
+import { enableGuideResize } from './resize.js';
+import { createSupplyView } from '../supply-chain/view.js';
 
-const tabs = ['operation', 'design', 'watch', 'manufacturing'];
+const tabs = ['operation', 'design', 'watch', 'manufacturing', 'supply'];
 const headings = { operation: 'How it works', design: 'Design considerations', watch: 'In service' };
 
 function element(tag, text, className) {
@@ -72,7 +74,7 @@ function manufacturingSection(notes) {
   return section;
 }
 
-export function createEducationPanel({ systems, parts }) {
+export function createEducationPanel({ systems, parts, onNavigate = () => {}, onHeatmap = () => {} }) {
   const panel = document.getElementById('learning-panel');
   const toggle = document.getElementById('learning-toggle');
   const content = document.getElementById('learning-content');
@@ -80,12 +82,15 @@ export function createEducationPanel({ systems, parts }) {
   let autoShow = true;
   let activeTab = 'operation';
   let current = { title: 'PG9171E gas turbine', system: 'Complete assembly', lesson: assemblyEducation, facts: [] };
+  const resizer = enableGuideResize(panel);
+  const supply = createSupplyView({ parts, systems, onNavigate, onHeatmap });
   try { autoShow = localStorage.getItem('pg9171e.part-guide') !== 'hidden'; } catch { /* Storage may be unavailable in private contexts. */ }
 
   function visibility(visible, remember = false) {
     const returnFocus = !visible && panel.contains(document.activeElement);
     panel.hidden = !visible;
     document.querySelector('.workspace').classList.toggle('guide-open', visible);
+    if (visible) resizer.refresh();
     toggle.setAttribute('aria-expanded', String(visible));
     toggle.setAttribute('aria-label', visible ? 'Hide part guide' : 'Show part guide');
     toggle.title = visible ? 'Hide part guide' : 'Show part guide';
@@ -108,6 +113,11 @@ export function createEducationPanel({ systems, parts }) {
       section.setAttribute('aria-labelledby', `learning-tab-${tab}`);
       section.tabIndex = 0;
       section.hidden = activeTab !== tab;
+      if (tab === 'supply') {
+        section.append(supply.renderPanel(current.part, current.systemId));
+        content.append(section);
+        continue;
+      }
       if (tab === 'manufacturing') {
         section.append(manufacturingSection(current.lesson.manufacturing));
         content.append(section);
@@ -159,7 +169,7 @@ export function createEducationPanel({ systems, parts }) {
       button.tabIndex = active ? 0 : -1;
       document.getElementById(`learning-${button.dataset.lessonTab}`).hidden = !active;
     }
-    document.getElementById('learning-general-sources').hidden = tab === 'manufacturing';
+    document.getElementById('learning-general-sources').hidden = tab === 'manufacturing' || tab === 'supply';
     content.scrollTop = 0;
   }
 
@@ -197,8 +207,11 @@ export function createEducationPanel({ systems, parts }) {
   }
 
   return {
+    showSupply() { visibility(true, true); setTab('supply'); },
     selectPart(part) {
+      supply.select(part?.id || null);
       update(part ? {
+        part,
         title: part.name,
         system: systems.find(system => system.id === part.system)?.name || 'Component',
         lesson: educationForPart(part) || assemblyEducation,
@@ -207,7 +220,8 @@ export function createEducationPanel({ systems, parts }) {
     },
     selectSystem(id) {
       const system = systems.find(system => system.id === id);
-      update({ title: system.name, system: 'Assembly overview', lesson: educationForSystem(id), facts: [['Selectable components', String(parts.filter(part => part.system === id).length)]] }, true);
+      supply.select(null);
+      update({ systemId: id, title: system.name, system: 'Assembly overview', lesson: educationForSystem(id), facts: [['Selectable components', String(parts.filter(part => part.system === id).length)]] }, true);
     }
   };
 }

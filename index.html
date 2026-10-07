@@ -15,7 +15,7 @@
         <div class="brand-mark" aria-hidden="true"><i data-lucide="box"></i></div>
         <div class="machine-title"><h1>PG9171E <span>GE Frame 9E</span></h1><div>GAS TURBINE <span class="divider">/</span> DLN1 CONFIGURATION</div></div>
         <div class="header-specs"><span><b>17</b> compressor stages</span><span><b>14</b> combustors</span><span><b>3</b> turbine stages</span></div>
-        <div class="header-actions"><button class="text-btn" id="learning-toggle" title="Show part guide" aria-label="Show part guide" aria-controls="learning-panel" aria-expanded="false"><i data-lucide="graduation-cap"></i><span>Part guide</span></button><button class="text-btn" id="reference-open" title="References and reconstruction limits"><i data-lucide="book-open"></i><span>References</span></button><button class="primary-btn" id="export-open"><i data-lucide="download"></i><span>Export CAD</span></button></div>
+        <div class="header-actions"><button class="text-btn" id="learning-toggle" title="Show part guide" aria-label="Show part guide" aria-controls="learning-panel" aria-expanded="false"><i data-lucide="graduation-cap"></i><span>Part guide</span></button><button class="text-btn" id="sourcing-open" title="Kraljic sourcing grid" aria-label="Open Kraljic sourcing grid" aria-haspopup="dialog" aria-controls="sourcing-dialog"><i data-lucide="chart-scatter"></i><span>Sourcing grid</span></button><button class="text-btn" id="reference-open" title="References and reconstruction limits"><i data-lucide="book-open"></i><span>References</span></button><button class="primary-btn" id="export-open"><i data-lucide="download"></i><span>Export CAD</span></button></div>
       </header>
       <div class="workspace">
         <aside class="assembly-panel" id="assembly-panel">
@@ -45,6 +45,7 @@
             <div class="toolbar-right"><select id="render-style" aria-label="Rendering style"><option value="shaded">Shaded</option><option value="cad">CAD edges</option><option value="xray">X-ray</option><option value="wire">Wireframe</option></select><button class="icon-btn" id="projection" title="Orthographic projection" aria-label="Orthographic projection" aria-pressed="false"><i data-lucide="box"></i></button></div>
           </div>
           <div id="canvas-container"></div>
+          <div id="heatmap-key" class="heatmap-key" hidden><b></b><div class="heat-ramp"></div><p>1 low → 5 very high · Analyst assessment</p></div>
           <div id="label-layer" aria-hidden="true"></div>
           <div class="viewport-heading"><span id="view-code" class="mono">SECTION A-A</span><h2 id="view-title">The complete flow path</h2><span class="view-subtitle" id="view-subtitle">Longitudinal section</span></div>
           <div class="view-tools" aria-label="Camera controls"><button class="icon-btn" id="fit-view" aria-label="Fit assembly" title="Fit assembly"><i data-lucide="scan"></i></button><button class="icon-btn" id="reset-view" aria-label="Reset view" title="Reset view"><i data-lucide="rotate-ccw"></i></button><span class="tool-divider"></span><button class="icon-btn" data-camera="iso" aria-label="Isometric view" title="Isometric view"><i data-lucide="box"></i></button><button class="icon-btn" data-camera="side" aria-label="Side view" title="Side view"><i data-lucide="panel-top"></i></button><button class="icon-btn" data-camera="top" aria-label="Top view" title="Top view"><i data-lucide="square"></i></button><button class="icon-btn" data-camera="end" aria-label="Inlet view" title="Inlet view"><i data-lucide="circle-dot"></i></button><span class="tool-divider"></span><button class="icon-btn" id="screenshot" aria-label="Save image" title="Save image"><i data-lucide="camera"></i></button><button class="icon-btn" id="fullscreen" aria-label="Full screen" title="Full screen"><i data-lucide="maximize"></i></button></div>
@@ -70,6 +71,7 @@
             <button role="tab" id="learning-tab-design" data-lesson-tab="design" aria-controls="learning-design" aria-selected="false" tabindex="-1">Design</button>
             <button role="tab" id="learning-tab-watch" data-lesson-tab="watch" aria-controls="learning-watch" aria-selected="false" tabindex="-1">In service</button>
             <button role="tab" id="learning-tab-manufacturing" data-lesson-tab="manufacturing" aria-controls="learning-manufacturing" aria-selected="false" tabindex="-1">Manufacturing</button>
+            <button role="tab" id="learning-tab-supply" data-lesson-tab="supply" aria-controls="learning-supply" aria-selected="false" tabindex="-1">Supply Chain</button>
           </div>
           <div class="learning-content" id="learning-content"></div>
         </aside>

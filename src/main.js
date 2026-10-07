@@ -8,6 +8,7 @@ import { buildAssembly, systems } from './model/assembly.js';
 import { createSectionCaps } from './section-caps.js';
 import './style.css';
 import { createEducationPanel } from './education/panel.js';
+import { supplyForPart, heatColor } from './supply-chain/index.js';
 
 const $ = id => document.getElementById(id);
 const icon = name => `<i data-lucide="${name}"></i>`;
@@ -54,6 +55,7 @@ let controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.dampingFactor=.085;controls.minDistance=.5;controls.maxDistance=100;controls.maxPolarAngle=Math.PI*.94;
 let cameraTween=null,orthoScale=7;
 let assembly, educationPanel, sectionCaps, materialRecords=[], edgeRecords=[], meshes=[], labels=[], lastTime=0, frame=0;
+let supplyRecords = new Map(), heatmap = 'none', cameraFocusParts;
 const sectionPlane=new THREE.Plane(new THREE.Vector3(0,0,-1),0);
 const raycaster=new THREE.Raycaster();const pointer=new THREE.Vector2();
 const targetBox=new THREE.Box3();
@@ -66,7 +68,7 @@ function resize() {
   const aspect=width/height;orthographic.left=-orthoScale*aspect;orthographic.right=orthoScale*aspect;orthographic.top=orthoScale;orthographic.bottom=-orthoScale;orthographic.updateProjectionMatrix();
 }
 let resizeFitTimer;
-new ResizeObserver(()=>{resize();if(assembly){clearTimeout(resizeFitTimer);resizeFitTimer=setTimeout(()=>fitCamera(null),180);}}).observe(container);
+new ResizeObserver(()=>{resize();if(assembly){clearTimeout(resizeFitTimer);resizeFitTimer=setTimeout(()=>fitCamera(null,false,cameraFocusParts),180);}}).observe(container);
 
 function boundsFor(parts=assembly.parts) {
   const b=new THREE.Box3();
@@ -75,6 +77,7 @@ function boundsFor(parts=assembly.parts) {
 }
 
 function fitCamera(direction,immediate=false,parts) {
+  cameraFocusParts = parts;
   assembly.root.updateMatrixWorld(true);
   const bounds=boundsFor(parts);const center=bounds.getCenter(new THREE.Vector3());const size=bounds.getSize(new THREE.Vector3());
   const dir=direction?new THREE.Vector3(...direction).normalize():camera.position.clone().sub(controls.target).normalize();
@@ -159,6 +162,8 @@ function applyStyle() {
     if(state.style==='cad'){m.mat.color.lerp(new THREE.Color(0xc5c9c2),.72);m.mat.metalness=.12;m.mat.roughness=.75;}
     if(state.style==='wire'){m.mat.color.set(selected?0x388056:0x527064);m.mat.metalness=0;}
     if(state.style==='xray'&&(m.kind==='casing'||m.kind==='support')){m.mat.transparent=true;m.mat.opacity=.15;m.mat.depthWrite=false;}
+    const heat = heatColor(supplyRecords.get(m.id), heatmap);
+    if(heat){m.mat.color.set(heat);m.mat.metalness=.05;m.mat.roughness=.85;}
     m.mat.needsUpdate=true;
   }
   for(const edge of edgeRecords)edge.object.visible=state.style==='cad';
@@ -176,7 +181,35 @@ function applySection() {
 
 function updateSectionCaps() {
   assembly.root.updateMatrixWorld(true);
-  sectionCaps.update({enabled:state.view==='section'&&state.sectionFill,style:state.style,selected:state.selected,selectedSystem:state.selectedSystem});
+  sectionCaps.update({enabled:state.view==='section'&&state.sectionFill,style:state.style,selected:state.selected,selectedSystem:state.selectedSystem,colors:heatmapColors});
+}
+
+let heatmapColors = null;
+function setHeatmap(mode) {
+  heatmap = mode;
+  heatmapColors = mode === 'none' ? null : new Map([...supplyRecords].map(([id, record])=>[id,heatColor(record,mode)]));
+  $('heatmap-key').hidden = mode === 'none';
+  $('heatmap-key').querySelector('b').textContent = mode === 'cost' ? 'Relative replacement cost' : 'Operational criticality';
+  applyStyle();
+}
+
+function navigateToSupplyPart(id) {
+  const part = assembly.parts.find(p=>p.id===id);
+  if(!part)return;
+  state.hidden.delete(part.system);
+  if(state.isolatedPart!==id)state.isolatedPart=null;
+  if(part.kind==='casing'){state.casings=true;$('casings').checked=true;}
+  if(part.kind==='rotor'){state.rotors=true;$('rotors').checked=true;}
+  if(part.system==='supports'){state.supports=true;$('supports').checked=true;}
+  applyVisibility();
+  selectPart(id);
+  educationPanel.showSupply();
+  const list = $('parts-'+part.system);
+  list.hidden=false;
+  const expand=document.querySelector('[data-expand="'+part.system+'"]');
+  expand.setAttribute('aria-expanded','true');expand.parentElement.classList.add('expanded');
+  fitCamera(null,false,[part]);
+  $('learning-title').focus({preventScroll:true});
 }
 
 function applyVisibility() {
@@ -215,6 +248,7 @@ function renderTree() {
 }
 
 function selectPart(id) {
+  if(!id)cameraFocusParts=undefined;
   state.selected=id;state.selectedSystem=null;
   const p=assembly.parts.find(p=>p.id===id);
   educationPanel.selectPart(p);
@@ -393,8 +427,8 @@ function animate(time) {
 }
 
 try {
-  assembly=buildAssembly();educationPanel=createEducationPanel({systems,parts:assembly.parts});scene.add(assembly.root);prepareMaterials();sectionCaps=createSectionCaps({parts:assembly.parts,plane:sectionPlane});scene.add(sectionCaps.group);buildLabels();buildFlow();renderTree();bindControls();applyStyle();resize();fitCamera([-.28,.32,1],true);refreshIcons();$('loading').hidden=true;
+  assembly=buildAssembly();supplyRecords=new Map(assembly.parts.map(p=>[p.id,supplyForPart(p)]));educationPanel=createEducationPanel({systems,parts:assembly.parts,onNavigate:navigateToSupplyPart,onHeatmap:setHeatmap});scene.add(assembly.root);prepareMaterials();sectionCaps=createSectionCaps({parts:assembly.parts,plane:sectionPlane});scene.add(sectionCaps.group);buildLabels();buildFlow();renderTree();bindControls();applyStyle();resize();fitCamera([-.28,.32,1],true);refreshIcons();$('loading').hidden=true;
   // Read-only diagnostics expose meaningful model and renderer state for verification.
-  window.__turbineDiagnostics=()=>({parts:assembly.parts.length,view:state.view,style:state.style,explosion:state.explode,spinning:state.spinning,visibleParts:assembly.parts.filter(p=>p.group.visible).length,triangles:renderer.info.render.triangles,drawCalls:renderer.info.render.calls,canvas:[renderer.domElement.width,renderer.domElement.height],camera:camera.position.toArray(),partIds:assembly.parts.map(p=>p.id),rotorAngle:assembly.rotors[0].rotation.x,sectionCaps:sectionCaps.diagnostics()});
+  window.__turbineDiagnostics=()=>({selected:state.selected,heatmap,cameraTarget:controls.target.toArray(),focusedPartIds:cameraFocusParts?.map(p=>p.id)||[],heatColors:Object.fromEntries(assembly.parts.map(p=>[p.id,materialRecords.find(m=>m.id===p.id)?.mat.color.getHexString()])),parts:assembly.parts.length,view:state.view,style:state.style,explosion:state.explode,spinning:state.spinning,visibleParts:assembly.parts.filter(p=>p.group.visible).length,triangles:renderer.info.render.triangles,drawCalls:renderer.info.render.calls,canvas:[renderer.domElement.width,renderer.domElement.height],camera:camera.position.toArray(),partIds:assembly.parts.map(p=>p.id),rotorAngle:assembly.rotors[0].rotation.x,sectionCaps:sectionCaps.diagnostics()});
   requestAnimationFrame(animate);
 }catch(error){console.error(error);$('loading').innerHTML=`<span>Unable to build the turbine model.</span><span>${error.message}</span>`;}

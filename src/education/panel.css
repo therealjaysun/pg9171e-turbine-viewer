@@ -1,12 +1,16 @@
 #learning-toggle[aria-expanded="true"] { background: #dfeae4; color: #275b46; }
-.learning-panel { width: 354px; flex: 0 0 354px; min-height: 0; display: flex; flex-direction: column; background: #fafbf9; border-left: 1px solid var(--line); z-index: 10; }
+.learning-panel { position: relative; width: var(--guide-width, 384px); flex: 0 0 var(--guide-width, 384px); min-height: 0; display: flex; flex-direction: column; background: #fafbf9; border-left: 1px solid var(--line); z-index: 10; }
+.learning-resize { position: absolute; top: 0; bottom: 0; left: -5px; width: 10px; cursor: ew-resize; touch-action: none; z-index: 2; }
+.learning-resize::after { content: ''; position: absolute; left: 4px; top: 40%; height: 52px; width: 3px; border-radius: 3px; background: #a6b9aa; }
+.learning-resize:hover, .learning-resize:focus-visible { background: #5e896328; outline: 2px solid #628b6b; outline-offset: -2px; }
+.resizing-guide, .resizing-guide * { cursor: ew-resize !important; user-select: none !important; }
 .learning-heading { padding: 19px 20px 14px; border-bottom: 1px solid var(--line); }
 .learning-heading-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
 .learning-heading-top > span { color: #59766b; font: 10px 'IBM Plex Mono', monospace; }
 .learning-heading-top .icon-btn { margin-right: -7px; }
 .learning-heading h2 { font-size: 18px; line-height: 1.4; font-weight: 600; overflow-wrap: anywhere; }
 #learning-system { color: #77837b; font-size: 11px; line-height: 1.5; margin-top: 7px; }
-.learning-tabs { display: flex; justify-content: space-between; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.learning-tabs { display: flex; flex-wrap: wrap; justify-content: flex-start; column-gap: 16px; row-gap: 0; padding: 0 16px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .learning-tabs button { padding: 14px 0 11px; background: none; border-bottom: 2px solid transparent; color: #6d7972; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .learning-tabs button[aria-selected="true"] { color: #246148; border-bottom-color: #36765b; }
 .learning-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 21px 20px 26px; scrollbar-gutter: stable; }
@@ -62,9 +66,9 @@ ul.learning-prose { padding-left: 17px; }
     .axis-widget { bottom: 163px; }
   }
 }
-@media (min-width: 1130px) and (max-width: 1430px) { .header-specs { display: none; } .header-actions { margin-left: auto; } }
+@media (min-width: 1130px) and (max-width: 1590px) { .header-specs { display: none; } .header-actions { margin-left: auto; } }
 @media (min-width: 761px) and (max-width: 1100px) {
-  .learning-panel { width: 308px; flex-basis: 308px; }
+  .learning-panel { width: var(--guide-width, 308px); flex-basis: var(--guide-width, 308px); }
   .guide-open .assembly-panel { width: 202px; }
   .guide-open .system-row .system-select { font-size: 10px; gap: 5px; }
   .learning-heading { padding: 15px 16px 12px; }
@@ -72,6 +76,7 @@ ul.learning-prose { padding-left: 17px; }
   .learning-tabs { padding: 0 12px; }
 }
 @media (max-width: 760px) {
+  .learning-resize { display: none; }
   .guide-open { flex-direction: column; min-height: 650px; }
   .guide-open .viewport { flex: 1 0 340px; min-height: 340px; }
   .learning-panel { width: 100%; flex: 0 0 46%; height: 46%; max-height: 510px; min-height: 310px; border-left: 0; border-top: 1px solid var(--line); }
