@@ -29,7 +29,8 @@ The production site is written to `dist/` and needs an HTTP server, such as `npm
 - Shaded, CAD-edge, transparent casing, and wireframe rendering.
 - Orthographic/perspective projection, standard views, orbit/pan/zoom, and image capture.
 - 110 selectable components with source timestamps, focus, isolation, and assembly visibility.
-- Part guide with component-specific Function, Design, In service and Manufacturing lessons, source links, and seven assembly overviews. Manufacturing covers production routes, quality checks and evidence limits with per-claim citations. Select a component in the model or tree to open it. Close with the X or Part guide button; the hidden preference persists across selections and reloads. Reopen with Part guide.
+- Resizable part guide with component-specific Function, Design, In service, Manufacturing and Supply Chain tabs, source links, and seven assembly overviews. Drag its left edge to widen it; arrow keys resize the focused separator and double-click resets its width. Select a component in the model or tree to open it. Close with the X or Part guide button; the hidden preference persists across selections and reloads. Reopen with Part guide.
+- Supply-chain cost and operational-criticality heat maps, with a per-part Kraljic assessment. The Kraljic button beside Part guide opens the searchable, filterable sourcing grid; each numbered dot centers its component and opens its Supply Chain guide.
 - Slow inspection rotation and illustrative flow particles. Particle paths describe the assembled flow and are hidden in exploded view; they are not a flow simulation.
 - GLB and binary STL export of the full assembled model or the currently visible, separated components.
 - Editable simplified parametric OpenSCAD source.
@@ -94,3 +95,17 @@ Research ledgers record claim scope, source locators and coverage for [compresso
 Verified on 2026-10-06: 110 component records, seven system overviews, 43 distinct cited source URLs and 139 browser-panel assertions. Production-viewer checks at 1440, 1280, 1024, 390 and 320 pixels wide found no horizontal overflow; all four tabs fit the 308-pixel tablet panel. Hide/reopen persistence, mobile family expansion and rotor motion passed. Canvas checks found 11,034 changed motion pixels and a nonblank mobile model. The full model verification and production build pass; Vite retains its large-bundle advisory.
 
 ![Manufacturing guide](exports/manufacturing-guide-desktop.png)
+
+### Supply-chain research and sourcing
+
+Three parallel research streams cover all 110 selectable components through 32 assessment families and 43 distinct component-source URLs. Read the [scoring method](docs/supply-chain-method.md) and evidence ledgers for [inlet/compressor](docs/supply-chain-compressor.md), [combustion/turbine](docs/supply-chain-hot-section.md), and [mechanics/exhaust/supports](docs/supply-chain-mechanics.md). The guide includes source applicability, manufacturing and qualification constraints, supplier routes to qualify, and price-evidence limits for each component.
+
+The 1–5 scores are provisional analyst assessments. Public evidence did not establish comparable replacement prices for the modeled groups, so every component says **Quote required**; the cost heat map indicates relative replacement burden, not dollars. Kraljic axes use supply risk and business impact independently of operational criticality. Dots are grouped within their quadrant without implying finer numerical positions. The current assessment places 109 components in Strategic and the crossfire/fuel-manifold group in Bottleneck. Empty quadrants are intentional.
+
+No modeled component passes the expensive/low-criticality screen (cost ≥4, operational criticality ≤2). That result does not rule out savings through qualified competition, repairs or shared spares; the model omits commodity consumables and much balance-of-plant hardware. These overlapping visualization groups are not an additive procurement bill of materials.
+
+`npm run verify` now checks source coverage, score bounds, unknown-ID rejection, quadrant boundaries, opportunity filtering and heat-map restoration. `/tests/supply-chain-panel.html` passes 224 browser assertions for navigation, citations, filters, heat-map synchronization, keyboard resizing and stored preferences. The manufacturing panel passes 157 assertions and the existing section renderer passes 89 WebGL assertions. Live viewer checks cover all 110 dots, camera recentering, selection through visibility/isolation changes, actual pointer resizing, original material restoration and layouts from 320 to 1440 pixels. The production build passes with Vite's existing large-bundle advisory.
+
+![Supply-chain guide and cost heat map](exports/supply-chain-desktop.png)
+
+![Expanded Kraljic sourcing grid](exports/supply-chain-grid.png)

@@ -22,7 +22,7 @@ fixture.innerHTML = `<div class="workspace">
   <div id="assembly-panel"></div>
   <aside id="learning-panel" hidden><button id="learning-close">Close part guide</button>
     <h2 id="learning-title" tabindex="-1"></h2><p id="learning-system"></p>
-    <div role="tablist">${['operation', 'design', 'watch', 'manufacturing'].map(tab => `<button role="tab" id="learning-tab-${tab}" data-lesson-tab="${tab}" aria-controls="learning-${tab}">${tab}</button>`).join('')}</div>
+    <div role="tablist">${['operation', 'design', 'watch', 'manufacturing', 'supply'].map(tab => `<button role="tab" id="learning-tab-${tab}" data-lesson-tab="${tab}" aria-controls="learning-${tab}">${tab}</button>`).join('')}</div>
     <div id="learning-content"></div>
   </aside><div id="learning-announcement"></div>
 </div>`;
@@ -81,7 +81,7 @@ try {
   active('operation');
   check(!document.getElementById('learning-general-sources').hidden, 'Function sources return');
   tab('operation').dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
-  active('manufacturing');
+  active('supply');
   panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   check(panel.hidden, 'Escape hides guide');
   results.textContent = `PASS: ${assertions} manufacturing panel assertions`;

@@ -126,7 +126,7 @@ export function createSectionCaps({parts, plane}) {
     return back.visible;
   }
 
-  function update({enabled = true, style = 'shaded', selected = null, selectedSystem = null} = {}) {
+  function update({enabled = true, style = 'shaded', selected = null, selectedSystem = null, colors = null} = {}) {
     active = enabled && style !== 'wire';
     group.visible = active;
     statistics = {activeParts: 0, activeMeshes: 0, activeInstances: 0, stencilTriangles: 0};
@@ -161,6 +161,7 @@ export function createSectionCaps({parts, plane}) {
       cap.scale.set(Math.max(size.x, 1e-6) + 1e-5, Math.max(size.y, 1e-6) + 1e-5, 1);
       const material = cap.material;
       material.color.copy(record.baseColor).lerp(new THREE.Color(style === 'cad' ? 0xdadfd7 : 0xe4ddc9), style === 'cad' ? 0.65 : 0.28);
+      if (colors?.get(part.id)) material.color.set(colors.get(part.id));
       material.emissive.set(selected === part.id || selectedSystem === part.system ? 0x316843 : 0);
       material.emissiveIntensity = 0.24;
       const translucent = style === 'xray' && (part.kind === 'casing' || part.kind === 'support');

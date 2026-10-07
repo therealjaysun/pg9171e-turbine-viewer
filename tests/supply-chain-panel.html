@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Supply chain panel regression tests</title>
+  <style>
+    :root { --line: #d6dfd5; }
+    body { font: 14px system-ui, sans-serif; margin: 16px; color: #273b31; }
+    [hidden] { display: none !important; }
+    #results { white-space: pre-wrap; padding: 16px; background: #eef3ed; }
+    #results[data-status="failed"] { background: #fbe3de; }
+    .test-actions { display: flex; gap: 8px; margin-bottom: 10px; }
+    .workspace { display: flex; width: 1400px; height: 660px; border: 1px solid var(--line); }
+    .assembly-panel { flex: 0 0 200px; width: 200px; }
+    .viewport { flex: 1; min-width: 280px; background: #f1f4ef; }
+    .learning-heading { padding: 14px; }
+    .learning-tabs button { border: 0; cursor: pointer; }
+    .learning-content { flex: 1; }
+    .dialog-heading { display: flex; justify-content: space-between; align-items: start; }
+    dialog { border: 1px solid var(--line); border-radius: 8px; overflow: auto; }
+    dialog::backdrop { background: #102d2440; }
+  </style>
+</head>
+<body>
+  <h1>Supply chain panel regression tests</h1>
+  <pre id="results" aria-live="polite">Running…</pre>
+  <script type="module" src="./supply-chain-panel-browser.js"></script>
+</body>
+</html>

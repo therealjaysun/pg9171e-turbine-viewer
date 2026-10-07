@@ -1,0 +1,94 @@
+.supply-heat-control { margin-bottom: 20px; }
+.supply-heat-control label { display: flex; flex-direction: column; gap: 8px; color: #52685c; font-size: 11px; }
+.supply-heat-control select, .sourcing-filters input[type=search], .sourcing-filters select { min-width: 0; max-width: 100%; border: 1px solid #cad7ce; background: #fff; border-radius: 4px; padding: 9px; font-size: 12px; }
+.supply-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.supply-legend > span { display: inline-grid; place-items: center; width: 26px; height: 23px; border-bottom: 6px solid var(--heat); color: #374b41; font: 10px 'IBM Plex Mono', monospace; }
+.supply-legend small { flex-basis: 100%; margin-top: 3px; font-size: 10px; color: #6f7e73; }
+.supply-dateline { font: 9px 'IBM Plex Mono', monospace; color: #78867b; line-height: 1.6; margin-bottom: 13px; }
+.supply-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.supply-stats > div { border: 1px solid #dae1da; border-top: 4px solid var(--heat); padding: 12px; border-radius: 4px; }
+.supply-stats span { display: block; font-size: 10px; line-height: 1.5; color: #647269; }
+.supply-stats strong { display: block; margin-top: 8px; font: 24px 'IBM Plex Mono', monospace; color: #344d40; }
+.supply-price { font-size: 12px; margin: 16px 0 8px; color: #446554; }
+.supply-expand { display: block; width: 100%; margin: 12px 0; padding: 11px; border: 1px solid #bfcfc3; border-radius: 4px; background: #eaf0e8; color: #2c5f46; font-size: 12px; }
+.supply-expand:hover { background: #dce9dd; }
+.supply-score-note { font-size: 11px; line-height: 1.7; color: #617568; margin: 12px 0 20px; }
+.kraljic-chart { min-width: 0; }
+.kraljic-y-title, .kraljic-x-title { color: #556d5f; font-size: 11px; font-weight: 600; padding: 8px 0; }
+.kraljic-x-title { text-align: center; }
+.kraljic-matrix { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border: 1px solid #c8d4c9; border-radius: 5px; overflow: hidden; }
+.kraljic-quadrant { padding: 15px; min-height: 164px; background: #eef3ed; }
+.kraljic-quadrant:nth-child(2n) { border-left: 1px dashed #adbdb0; }
+.kraljic-quadrant:nth-child(n+3) { border-top: 1px dashed #adbdb0; }
+.kraljic-quadrant[data-quadrant=strategic] { background: #f4eee4; }
+.kraljic-quadrant[data-quadrant=bottleneck] { background: #f2efea; }
+.kraljic-quadrant[data-quadrant=routine] { background: #f4f6f2; }
+.kraljic-quadrant.has-selection { box-shadow: inset 0 0 0 2px #52755e; }
+.kraljic-quadrant h4 { font-size: 14px; margin: 0 0 5px; font-weight: 600; color: #354e40; }
+.kraljic-quadrant p { font-size: 11px; line-height: 1.6; color: #637365; }
+.kraljic-quadrant > small { display: block; margin-top: 5px; font-size: 9px; color: #758575; }
+.kraljic-dots { display: flex; flex-wrap: wrap; align-content: start; gap: 5px; margin-top: 13px; }
+.sourcing-dot { flex: 0 0 25px; height: 25px; border: 2px solid var(--heat); border-radius: 50%; color: #273b31; background: #ffffffd9; padding: 0; font: 9px 'IBM Plex Mono', monospace; }
+.sourcing-dot:hover, .sourcing-dot:focus-visible { background: #fff; outline: 2px solid #456c57; outline-offset: 1px; transform: scale(1.12); }
+.sourcing-dot.selected { box-shadow: 0 0 0 2px #273b31; font-weight: 700; }
+.compact .kraljic-quadrant { padding: 11px 9px; min-height: 113px; }
+.compact .kraljic-quadrant h4 { font-size: 12px; }
+.compact .kraljic-quadrant p { font-size: 10px; }
+.compact .kraljic-quadrant > small { font-size: 8px; }
+.compact .kraljic-dots { margin-top: 9px; }
+.compact .sourcing-dot { color: var(--heat); font-size: 16px; }
+.supply-method { border-top: 1px solid #dce3da; padding: 13px 0; font-size: 12px; color: #526959; line-height: 1.8; }
+.supply-method summary { cursor: pointer; font-weight: 600; }
+.supply-method p { margin-top: 12px; }
+.supply-method a { display: inline-block; margin-top: 10px; color: #316650; text-decoration: underline; }
+.supply-opportunity { background: #f0f3e9; border: 1px solid #d5ddcb; padding: 15px; border-radius: 4px; margin: 20px 0; }
+.supply-opportunity h3 { font-size: 12px; line-height: 1.6; font-weight: 600; color: #415a43; }
+.supply-opportunity p { margin-top: 8px; font-size: 11px; line-height: 1.75; color: #64755f; }
+.supply-sources p { font-size: 10px; line-height: 1.7; color: #758073; margin: 4px 0 14px; }
+.supply-sources a { overflow-wrap: anywhere; }
+.sourcing-dialog { width: min(1140px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); }
+.sourcing-dialog .dialog-heading { padding: 16px 25px; }
+.sourcing-dialog .dialog-heading h2 { margin-top: 4px; }
+.sourcing-body { padding: 20px 25px; }
+.sourcing-intro { font-size: 12px; line-height: 1.8; color: #667b6b; margin-bottom: 12px; }
+.sourcing-body > .supply-heat-control { display: flex; align-items: end; gap: 24px; margin-bottom: 14px; }
+.sourcing-body > .supply-heat-control label { width: 275px; max-width: 100%; }
+.sourcing-body > .supply-heat-control .supply-legend { width: 220px; }
+.sourcing-layout .sourcing-dot { flex-basis: 24px; height: 24px; }
+.sourcing-layout .kraljic-dots { gap: 3px; }
+.sourcing-layout .kraljic-quadrant { min-height: 115px; padding: 12px; }
+.sourcing-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid #dae2d8; }
+.sourcing-filters input[type=search] { flex: 1; min-width: 160px; }
+.sourcing-filters label { display: flex; align-items: center; gap: 5px; font-size: 11px; }
+.sourcing-filters input[type=checkbox] { accent-color: #487058; }
+.sourcing-layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(240px, 1fr); gap: 22px; align-items: start; }
+.sourcing-part-list { max-height: 600px; overflow-y: auto; overscroll-behavior: contain; padding: 0 5px; margin-top: 31px; }
+.sourcing-part-row { display: grid; grid-template-columns: 27px 1fr; gap: 5px 7px; width: 100%; padding: 12px 5px; text-align: left; background: transparent; border-bottom: 1px solid #dce4d8; font-size: 12px; line-height: 1.5; }
+.sourcing-part-row:hover, .sourcing-part-row.selected { background: #e4eddf; }
+.sourcing-part-row small { grid-column: 2; font-size: 10px; color: #788675; }
+.sourcing-number { color: #7b8e7e; font: 10px 'IBM Plex Mono', monospace; padding-top: 3px; }
+.supply-overview-list button { display: block; padding: 10px 0; width: 100%; text-align: left; background: transparent; border-bottom: 1px solid #e0e6dc; font-size: 12px; line-height: 1.6; color: #4a6d56; }
+.supply-overview-list button:hover { background: #eaf0e5; }
+.supply-empty { font-size: 11px; color: #7b8879; line-height: 1.7; }
+.heatmap-key { position: absolute; z-index: 4; top: 170px; left: 25px; padding: 10px 12px; background: #fafbf6ed; border: 1px solid #d5dfcf; border-radius: 4px; max-width: calc(100% - 100px); pointer-events: none; }
+.heatmap-key b { font-size: 11px; font-weight: 500; }
+.heatmap-key p { font-size: 9px; color: #687b66; margin-top: 6px; }
+.heatmap-key .heat-ramp { height: 6px; border-radius: 2px; margin-top: 8px; background: linear-gradient(to right, #387e9e, #60a6a5, #e1bf67, #cf8146, #a84342); }
+@media (max-width: 850px) {
+  .sourcing-layout { grid-template-columns: minmax(0, 1fr); }
+  .sourcing-part-list { max-height: 290px; margin-top: 0; }
+}
+@media (max-width: 760px) {
+  .sourcing-body > .supply-heat-control { flex-wrap: wrap; gap: 0; }
+  .sourcing-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 20px); }
+  .sourcing-dialog .dialog-heading, .sourcing-body { padding: 16px; }
+  .sourcing-filters { align-items: stretch; flex-direction: column; }
+  .sourcing-filters input[type=search] { min-width: 0; }
+  .sourcing-layout .kraljic-quadrant { padding: 10px 7px; }
+  .sourcing-layout .kraljic-quadrant h4 { font-size: 12px; }
+  .sourcing-layout .kraljic-dots { gap: 4px; }
+  .sourcing-dot { flex-basis: 24px; height: 24px; }
+  .heatmap-key { top: 64px; left: 12px; max-width: calc(100% - 75px); padding: 6px 9px; }
+  .heatmap-key b { font-size: 10px; }
+  .heatmap-key p { font-size: 8px; margin-top: 4px; }
+}
