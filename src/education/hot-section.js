@@ -1,4 +1,8 @@
 const references = {
+  hardware: {
+    label: 'Hanwha Power / PSM: 9E component photographs and replacement configurations',
+    url: 'https://www.psm.com/products/b-e-class-frames/9e',
+  },
   buckets: {
     label: 'Sulzer: PG9171E-compatible bucket cooling specifications',
     url: 'https://www.sulzer.com/-/media/files/services/spare-parts/brochures/ge_ms9001e_equivalentbuckets_en_e10255_5_2014_web.pdf?sc_lang=en',
@@ -269,12 +273,18 @@ export function hotSectionEducation(part) {
 
   if (id.startsWith('turbine-wheel-')) {
     const stage = Number(id.split('-').at(-1));
-    return wheels[stage] ? lesson(part, wheels[stage], stage < 3 ? ['buckets', 'family', 'life'] : ['family', 'life']) : null;
+    if (!wheels[stage]) return null;
+    return lesson(part, {...wheels[stage], design: [...wheels[stage].design,
+      'Individual platform seams, shanks and multi-tang attachment end faces are photo-informed visual details. Their dimensions and three-tang silhouette are illustrative; full-depth mating wheel sockets are not modeled. The PSM photograph shows replacement hardware, not the exact video unit.']},
+    stage < 3 ? ['hardware', 'buckets', 'family', 'life'] : ['hardware', 'family', 'life']);
   }
 
   if (id.startsWith('turbine-nozzle-')) {
     const stage = Number(id.split('-').at(-1));
-    return nozzles[stage] ? lesson(part, nozzles[stage], stage === 1 ? ['flow', 'maintenance'] : ['maintenance']) : null;
+    if (!nozzles[stage]) return null;
+    return lesson(part, {...nozzles[stage], design: [...nozzles[stage].design,
+      'Inner platforms have visible segment seams and underside seal lands. First- and second-stage outer platforms include stepped mounting rails informed by PSM photographs. Dimensions and fits remain reconstructed; diaphragm plumbing and exact mounting interfaces are not recovered.']},
+    stage === 1 ? ['hardware', 'flow', 'maintenance'] : ['hardware', 'maintenance']);
   }
 
   if (id === 'turbine-spacers-studs') return lesson(part, {

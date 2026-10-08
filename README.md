@@ -56,6 +56,14 @@ This is not OEM CAD or a manufacturing-validated dimensional replica. The model 
 
 The model verification checks identifiers, finite geometry, source component counts, instance transforms, airfoil triangle area, unit normals, cap orientation and closed parametric airfoil edges. It also checks assembled/exploded bounds and restoration, pierced-channel geometry, cooling-bore voids and surrounding walls, rotor/stator axial separation, journal and seal clearances, thrust faces and housing drains. The export script generates both mesh files and verifies a GLB round trip, component counts, scale, bounds and STL facets. These targeted checks are not a universal collision or watertight-solid certificate.
 
+### R06 Photo-informed Hot-section Hardware
+
+PSM's 9E photographs inform new individual bucket platforms, shanks and multi-tang attachment end faces, first-/second-stage nozzle mounting rails, and segmented inner platforms. The existing cooling paths remain open. Dimensions are inferred; complete mating wheel sockets, individual root plenums and exact casing interfaces remain simplified. The legacy DLN1 configuration and separate OpenSCAD source are retained. See the [evidence and limits](docs/psm-hot-section-refinement.md).
+
+The local `/tests/hot-hardware.html` fixture isolates actual bucket and nozzle meshes for close inspection. Verification includes 50 new material/void probes, the existing 12,001 assembled cavity probes, all 837 mesh-boundary audits, and GLB/STL export checks. R06 exports have 5,954,683 triangles (73.69 MB GLB; 297.73 MB STL), with zero degenerate STL faces.
+
+![R06 bucket attachment and nozzle mounting detail](exports/psm-hot-section-detail.png)
+
 Revision R02 audits all 110 selectable parts against timestamped video evidence. See [compressor and inlet](docs/audit-compressor.md), [combustion, turbine and exhaust](docs/audit-hot-section.md), and [bearings, shaft and supports](docs/audit-mechanics.md). Genuine open ports replace decorative hole markers; continuous rotor and diffuser geometry replaces missing sections. Running gaps and the representative airfoil cooling bores are deliberately labeled as reconstructed, not OEM dimensions.
 
 R03 is a fresh direct-frame comparison, which found visible discrepancies not caught by the numerical checks. Corrections and unresolved differences are recorded separately for [compressor](docs/video-check-compressor.md), [combustion](docs/video-check-combustion.md), [turbine/exhaust](docs/video-check-turbine.md) and [bearings](docs/video-check-bearings.md). These records distinguish visible features from narrated counts and inferred dimensions; they do not claim that the model matches every frame.

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>R06 hot-section detail inspection</title>
+  <style>
+    body { margin: 24px; color: #263f38; background: #f4f6f3; font: 15px system-ui, sans-serif; }
+    h1 { font-size: 24px; } p { max-width: 950px; line-height: 1.5; }
+    #views { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    article { min-width: 0; background: white; padding: 12px; border: 1px solid #d2dbd5; border-radius: 8px; }
+    h2 { font-size: 17px; } canvas { display: block; width: 100%; aspect-ratio: 0.9; }
+    button { padding: 9px 14px; background: #294e40; color: white; border: 0; border-radius: 5px; cursor: pointer; }
+    @media (max-width: 700px) { #views { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>R06 · Hot-section hardware</h1>
+  <p>Actual model meshes, isolated at one bucket / nozzle segment. Drag to orbit; scroll to zoom. Attachment end faces, platform seams and mounting rails use estimated dimensions. Full-depth wheel sockets and individual cooling plenums remain simplified.</p>
+  <button id="save">Save comparison image</button>
+  <p id="results">Building model…</p>
+  <div id="views"></div>
+  <script type="module" src="./hot-hardware-browser.js"></script>
+</body>
+</html>
