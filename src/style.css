@@ -5,3 +5,19 @@
 @media(max-width:760px){.app-header{height:69px;padding:0 12px;gap:10px}.mobile-menu{display:flex;width:27px}.brand-mark{display:none}.machine-title h1{font-size:18px}.machine-title h1 span{display:block;font-size:10px;margin:3px 0 0}.machine-title>div{display:none}.header-actions{gap:4px}.header-actions .text-btn{width:34px;padding:8px}.header-actions .text-btn span{display:none}.primary-btn{font-size:11px;padding:8px 10px;gap:6px}.header-actions svg{width:15px;height:15px}.workspace{height:calc(100dvh - 69px);min-height:520px}.assembly-panel{position:absolute;left:0;top:69px;bottom:0;width:244px;transform:translateX(-100%);transition:transform .25s;box-shadow:8px 0 24px #23402118}.assembly-panel.open{transform:translateX(0)}.assembly-tree{max-height:33vh}.view-toolbar{top:13px;left:12px;right:12px;gap:8px}.segmented button{font-size:10px;padding:8px 10px}.toolbar-right{gap:5px}.toolbar-right select{padding:8px 4px;font-size:10px;width:79px}.toolbar-right>.icon-btn{width:29px}.viewport-heading{top:72px;left:17px}.viewport-heading h2{font-size:16px}.viewport-heading>span:first-child{font-size:9px}.view-subtitle{font-size:9px}.view-tools{top:150px;right:12px;padding:2px}.view-tools .icon-btn{width:27px;height:29px}.view-tools .icon-btn svg{width:15px;height:15px}.view-bottom{left:12px;right:12px;bottom:43px;gap:8px;align-items:stretch}.section-controls,.explode-controls{flex:1;width:100%;min-height:44px;gap:9px;padding:7px 10px;justify-content:center}.section-controls>label{display:block}.section-controls input[type=range]{width:auto;flex:1;min-width:45px}.motion-controls{margin-left:auto;padding:2px 6px;min-width:110px;font-size:9px}.view-bottom input[type=range]{width:115px}.viewport-footer{font-size:8px;padding:0 13px;gap:5px}#mesh-status{font-size:8px}.axis-widget{bottom:159px;left:14px;width:52px;height:52px}.axis-widget svg{width:52px;height:52px}.axis-widget span{display:none}.model-label{font-size:8px;padding:4px 6px}.model-label .label-index{display:none}.model-label:after{height:10px}#selection-tag{bottom:141px;font-size:10px}.dialog-heading{padding:20px}.dialog-body{padding:19px}.dialog-heading h2{font-size:20px}.source-item{gap:9px}.source-item small{line-height:1.5}.dialog-body td,.dialog-body th{padding:8px 4px}.dialog-body table{font-size:9px}.export-scope{font-size:11px;align-items:flex-start;flex-direction:column}.export-scope select{max-width:100%;width:100%}}
 @media(max-width:360px){.segmented button{padding:8px 6px;font-size:9px}.view-toolbar{left:9px;right:9px;gap:5px}.toolbar-right select{width:84px;font-size:9px}.toolbar-right{gap:4px}.toolbar-right>.icon-btn{width:27px}.section-controls>label{display:none}.machine-title h1{font-size:16px}.header-actions .primary-btn{padding:8px}.view-tools{right:9px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}.loading-wheel{animation:none}}
+
+/* Independent assembly and internal inspection controls. */
+.explode-controls {flex-direction:column;align-items:stretch;gap:6px;max-width:440px}
+.explode-row {display:flex;align-items:center;gap:10px;min-height:28px}
+.explode-row>svg {width:16px;height:16px;flex-shrink:0;color:var(--muted)}
+.explode-row label {min-width:92px;font-size:11px}
+.explode-row input[type=range] {width:120px;min-width:65px;flex:1}
+.explode-row output {min-width:34px;font-size:10px;text-align:right}
+.explode-row:nth-child(2) {padding-right:38px}
+.explode-controls p {margin:2px 0 0;font-size:10px;line-height:1.4;max-width:370px;color:var(--muted)}
+@media(max-width:650px) {
+  .explode-controls {max-width:calc(100vw - 32px);padding:10px}
+  .explode-row {gap:6px}.explode-row label {min-width:85px}
+  .explode-row input[type=range] {width:75px}
+  .view-bottom:has(.explode-controls:not([hidden])) .motion-controls {display:none}
+}

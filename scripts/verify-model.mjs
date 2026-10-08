@@ -14,6 +14,7 @@ import {verifyExhaust} from './verify-exhaust.mjs';
 import {verifyWallBoundaries} from './verify-wall-boundaries.mjs';
 import { verifyManufacturing } from './verify-manufacturing.mjs';
 import { verifySupplyChain } from './verify-supply-chain.mjs';
+import { verifyExplosion } from './verify-explosion.mjs';
 
 const model = buildAssembly();
 const byId = new Map(model.parts.map(part => [part.id, part]));
@@ -224,15 +225,16 @@ assert.ok(assembledSize.x > 10 && assembledSize.x < 13, 'Assembled axial envelop
 assert.ok(assembledSize.y > 3 && assembledSize.y < 6, 'Assembled height outside expected reconstruction envelope');
 assert.ok(assembledSize.z > 3 && assembledSize.z < 6, 'Assembled width outside expected reconstruction envelope');
 
-// Exercise the same documented part-origin/offset contract used by the viewer.
-for (const part of model.parts) part.group.position.copy(part.origin).add(part.offset);
+// Exercise both inspection layers through the same controller as the viewer.
+verifyExplosion(model);
+model.explosion.apply(1,1);
 model.root.updateMatrixWorld(true);
 const exploded = new THREE.Box3().setFromObject(model.root);
 const explodedSize = exploded.getSize(new THREE.Vector3());
 finite([...exploded.min.toArray(), ...exploded.max.toArray()], 'Exploded bounds');
 assert.ok(explodedSize.x > assembledSize.x + 1, 'Exploded assembly does not separate axially');
 assert.ok(explodedSize.y > assembledSize.y + 1, 'Exploded assembly does not lift the casing halves');
-for (const part of model.parts) part.group.position.copy(part.origin);
+model.explosion.apply(0,0);
 model.root.updateMatrixWorld(true);
 const restored = new THREE.Box3().setFromObject(model.root);
 assert.ok(restored.min.distanceTo(assembled.min) < 1e-8 && restored.max.distanceTo(assembled.max) < 1e-8, 'Assembly cannot be restored after explosion');

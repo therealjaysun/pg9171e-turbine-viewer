@@ -5,6 +5,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { buildAssembly } from '../src/model/assembly.js';
+import { portableAssembly } from '../src/model/portable-assembly.js';
 
 // Three's browser exporter uses FileReader for Blob conversion.
 globalThis.FileReader ??= class {
@@ -22,51 +23,6 @@ globalThis.FileReader ??= class {
     }
   }
 };
-
-function portableAssembly(assembly) {
-  const root = new THREE.Group();
-  root.name = 'PG9171E DLN1 reconstructed assembly';
-  assembly.root.updateMatrixWorld(true);
-  const inverse = new THREE.Matrix4(), instance = new THREE.Matrix4();
-  for (const part of assembly.parts) {
-    const group = new THREE.Group();
-    group.name = part.name;
-    group.userData = {
-      component: part.id, system: part.system, sourceTime: part.sourceTime,
-      geometry: 'Reconstructed; dimensions estimated',
-    };
-    inverse.copy(part.group.matrixWorld).invert();
-    group.matrix.makeTranslation(...part.origin.toArray());
-    group.matrixAutoUpdate = false;
-    part.group.traverse(object => {
-      if (!object.isMesh) return;
-      const material = object.material.clone();
-      material.clippingPlanes = [];
-      material.wireframe = false;
-      material.transparent = false;
-      material.opacity = 1;
-      material.depthWrite = true;
-      material.emissive.set(0);
-      const local = new THREE.Matrix4().multiplyMatrices(inverse, object.matrixWorld);
-      const add = transform => {
-        const mesh = new THREE.Mesh(object.geometry, material);
-        mesh.name = object.name || part.name;
-        mesh.matrix.copy(transform);
-        mesh.matrixAutoUpdate = false;
-        group.add(mesh);
-      };
-      if (object.isInstancedMesh) {
-        for (let i = 0; i < object.count; i++) {
-          object.getMatrixAt(i, instance);
-          add(new THREE.Matrix4().multiplyMatrices(local, instance));
-        }
-      } else add(local);
-    });
-    root.add(group);
-  }
-  root.updateMatrixWorld(true);
-  return root;
-}
 
 function assertBounds(actual, expected, tolerance, label) {
   assert.ok(actual.min.distanceTo(expected.min) < tolerance, `${label}: lower bounds differ`);

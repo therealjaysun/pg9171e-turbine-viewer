@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildCompressor } from './compressor.js';
 import { buildHotSection } from './hot-section.js';
-import { part, material, palette, ring, box, bolts, rod, lathe, hollowRod, TAU } from './helpers.js';
+import { createExplosionController } from './explosion.js';
+import { part, subassembly, material, palette, ring, box, bolts, rod, lathe, hollowRod, TAU } from './helpers.js';
 import { subtractGeometry } from './csg.js';
 
 export const systems = [
@@ -54,6 +55,10 @@ function named(object, name, role) {
 
 function bearingHousing(parent, station, mat, boltMat) {
   const {number,x,start,end}=station;
+  const halves = {
+    lower: subassembly(parent, `Bearing ${number} lower housing`, [0,-1.15,0]),
+    upper: subassembly(parent, `Bearing ${number} upper housing`, [0,1.15,0]),
+  };
   const ports=[
     {x,angle:Math.PI,radius:.035,name:'Oil drain'},
     {x:x-.07,angle:Math.PI/2,radius:.026,name:'Oil feed'},
@@ -67,7 +72,7 @@ function bearingHousing(parent, station, mat, boltMat) {
   });
   const combinedCuts=mergeGeometries(cutters,false);
   for(const [half,startAngle] of [['lower',0],['upper',Math.PI]]) {
-    const shell=lathe(parent,[[start,.350],[start,.438],[start+.035,.438],
+    const shell=lathe(halves[half],[[start,.350],[start,.438],[start+.035,.438],
       [start+.055,.410],[end-.055,.410],[end-.035,.438],[end,.438],
       [end,.350],[start,.350]],mat,32,startAngle,Math.PI);
     named(shell,`Bearing ${number} ${half} split housing with through ports`,'bearing-housing');
@@ -81,12 +86,12 @@ function bearingHousing(parent, station, mat, boltMat) {
     const railGeometry=new THREE.BoxGeometry(end-start-.04,.050,.100);
     railGeometry.translate((start+end)/2,half*.027,side*.406);
     const rail=new THREE.Mesh(subtractGeometry(railGeometry,[combinedCuts]),mat);
-    railGeometry.dispose();parent.add(rail);
+    railGeometry.dispose();halves[half<0?'lower':'upper'].add(rail);
     named(rail,`Bearing ${number} ${half<0?'lower':'upper'} split-line flange`,'bearing-split-flange');
     for(const fraction of [.12,.50,.88]) {
       const boltX=start+(end-start)*fraction;
       if(Math.abs(boltX-(x-.07))<.045)continue;
-      named(rod(parent,[boltX,half*.052,side*.417],[boltX,half*.064,side*.417],.012,boltMat,6),
+      named(rod(halves[half<0?'lower':'upper'],[boltX,half*.052,side*.417],[boltX,half*.064,side*.417],.012,boltMat,6),
         `Bearing ${number} split-line fastening head`,'bearing-split-fastener');
     }
   }
@@ -98,9 +103,9 @@ function bearingHousing(parent, station, mat, boltMat) {
     const raw=new THREE.ExtrudeGeometry(outline,{depth:.21,bevelEnabled:false,steps:1});
     raw.translate(0,0,-.105);
     const drain=new THREE.CylinderGeometry(.035,.035,.46,24);drain.translate(x,-.57,0);
-    const foot=new THREE.Mesh(subtractGeometry(raw,[drain]),mat);parent.add(foot);
+    const foot=new THREE.Mesh(subtractGeometry(raw,[drain]),mat);halves.lower.add(foot);
     named(foot,'Bearing 1 tapered lower casting with open drain','bearing-casting-foot');
-    named(hollowRod(parent,[x,-.448,0],[x,-.730,0],.044,.035,mat,24),
+    named(hollowRod(halves.lower,[x,-.448,0],[x,-.730,0],.044,.035,mat,24),
       'Bearing 1 drain continuation through lower casting','bearing-passage');
     raw.dispose();drain.dispose();
   }
@@ -109,14 +114,14 @@ function bearingHousing(parent, station, mat, boltMat) {
   for(const port of ports) {
     const from=[port.x,.332*Math.cos(port.angle),.332*Math.sin(port.angle)];
     const to=[port.x,.448*Math.cos(port.angle),.448*Math.sin(port.angle)];
-    named(hollowRod(parent,from,to,port.radius+.006,port.radius,mat,24),
+    named(hollowRod(halves[Math.cos(port.angle)<0?'lower':'upper'],from,to,port.radius+.006,port.radius,mat,24),
       `Bearing ${number} ${port.name.toLowerCase()} open passage`,'bearing-passage');
     if(number===2&&port.angle===0) {
-      named(hollowRod(parent,from,to,.018,.012,mat,20),'Bearing 2 sealing-air tube within vent annulus','bearing-passage');
+      named(hollowRod(halves[Math.cos(port.angle)<0?'lower':'upper'],from,to,.018,.012,mat,20),'Bearing 2 sealing-air tube within vent annulus','bearing-passage');
     }
   }
-  bolts(parent,start-.011,.397,12,.017,boltMat);
-  bolts(parent,end+.011,.397,12,.017,boltMat);
+  bolts(subassembly(parent, `Bearing ${number} forward end fasteners`, [-1.4,0,0]),start-.011,.397,12,.017,boltMat);
+  bolts(subassembly(parent, `Bearing ${number} aft end fasteners`, [1.4,0,0]),end+.011,.397,12,.017,boltMat);
 }
 
 function journalLiner(parent,station,mat,supportMat) {
@@ -124,7 +129,8 @@ function journalLiner(parent,station,mat,supportMat) {
   const inner=radius+mechanicsDimensions.journalGap;
   const outer=radius+.072;
   for(const [half,angle] of [['lower',.010],['upper',Math.PI+.010]]) {
-    const liner=lathe(parent,[[x-length/2,inner],[x-length/2,outer],
+    const halfGroup = subassembly(parent, `Bearing ${number} ${half} liner`, [0,half==='upper'?.55:-.55,0]);
+    const liner=lathe(halfGroup,[[x-length/2,inner],[x-length/2,outer],
       [x+length/2,outer],[x+length/2,inner],[x-length/2,inner]],mat,48,angle,Math.PI-.020);
     // The No. 1 liner is elliptical. The exaggerated two-lobe film is visible
     // without prescribing a true bearing clearance or loaded shaft position.
@@ -139,12 +145,14 @@ function journalLiner(parent,station,mat,supportMat) {
     named(liner,`Bearing ${number} ${half} ${number===1?'elliptical ':''}journal liner`,'journal-liner');
   }
   for(const end of [-1,1]) {
-    named(ring(parent,x+end*(length/2+.010),.350,.020,.350-outer,supportMat),
+    named(ring(subassembly(parent, `Bearing ${number} liner retainer ${end}`, [end*.4,0,0]),x+end*(length/2+.010),.350,.020,.350-outer,supportMat),
       `Bearing ${number} liner retaining land`,'bearing-retainer');
   }
 }
 
 function labyrinth(parent,x,journalRadius,mat,label,{brush=false}={}) {
+  const station = mechanicsDimensions.bearings.find(bearing => parent.userData.partId === `bearing-${bearing.number}`);
+  parent = subassembly(parent, label, [(x-station.x)*2.5,0,0]);
   const radius=journalRadius+mechanicsDimensions.sealGap;
   named(ring(parent,x,.350,.075,.350-(journalRadius+.07),mat,64),`${label} carrier`,'seal-carrier');
   for(const sign of [-1,1]) for(let tooth=0;tooth<3;tooth++) {
@@ -158,30 +166,31 @@ function labyrinth(parent,x,journalRadius,mat,label,{brush=false}={}) {
 function thrustPads(parent,mat,steel) {
   const {center,width,padGap,padInnerRadius,padOuterRadius}=mechanicsDimensions.thrust;
   for(const [side,label] of [[-1,'Active equalizing'],[1,'Inactive non-equalizing']]) {
+    const pack = subassembly(parent, `${label} thrust pad assembly`, [side*.55,0,0]);
     const face=center+side*(width/2+padGap);
     const back=face+side*.024;
     const low=Math.min(face,back),high=Math.max(face,back);
     const baseX=back+side*(side===-1?.042:.022);
-    named(ring(parent,baseX,.350,.024,.350-padInnerRadius,steel),`${label} thrust base ring`,'thrust-base');
+    named(ring(pack,baseX,.350,.024,.350-padInnerRadius,steel),`${label} thrust base ring`,'thrust-base');
     for(let i=0;i<8;i++) {
       const a=i*TAU/8+.045;
-      named(lathe(parent,[[low,padInnerRadius],[low,padOuterRadius],[high,padOuterRadius],
+      named(lathe(pack,[[low,padInnerRadius],[low,padOuterRadius],[high,padOuterRadius],
         [high,padInnerRadius],[low,padInnerRadius]],mat,12,a,TAU/8-.09),
       `${label} thrust pad ${i+1} (population illustrative)`,'thrust-pad');
       const angle=a+(TAU/8-.09)/2;
       const y=-Math.sin(angle)*.286,z=Math.cos(angle)*.286;
-      named(rod(parent,[back,y,z],[baseX-side*.012,y,z],.018,steel),`${label} pad pivot`,'thrust-pivot');
+      named(rod(pack,[back,y,z],[baseX-side*.012,y,z],.018,steel),`${label} pad pivot`,'thrust-pivot');
       if(side===-1) {
         for(const [tier,phase,plateX] of [['upper',0,back-.015],['lower',TAU/16,back-.029]]) {
           const plateAngle=angle+phase;
-          const plate=box(parent,[.010,.030,.114],[plateX,-Math.sin(plateAngle)*.286,Math.cos(plateAngle)*.286],steel);
+          const plate=box(pack,[.010,.030,.114],[plateX,-Math.sin(plateAngle)*.286,Math.cos(plateAngle)*.286],steel);
           plate.rotation.x=plateAngle+Math.PI/2;
           named(plate,`Active thrust ${tier} leveling plate (representative)`,'thrust-equalizer');
           plate.userData.levelingTier=tier;
         }
       } else {
         const gapAngle=a-.045;
-        const plate=box(parent,[.028,.084,.010],[back-.010,-Math.sin(gapAngle)*.2835,Math.cos(gapAngle)*.2835],steel);
+        const plate=box(pack,[.028,.084,.010],[back-.010,-Math.sin(gapAngle)*.2835,Math.cos(gapAngle)*.2835],steel);
         // Local Y spans the pad radius; local Z lies along the circumference.
         plate.rotation.x=gapAngle+Math.PI/2;
         named(plate,'Inactive thrust inter-pad oil-control plate (representative)','thrust-oil-control');
@@ -193,7 +202,7 @@ function thrustPads(parent,mat,steel) {
 function tiltingJournal(parent,station,mat,steel) {
   const {x,radius,length}=station;
   const inner=radius+mechanicsDimensions.journalGap,outer=radius+.067;
-  const retainer=ring(parent,x,.322,length+.046,.045,steel,64);
+  const retainer=ring(subassembly(parent, 'Bearing 3 pad retainer', [.5,0,0]),x,.322,length+.046,.045,steel,64);
   const passages=[{x:x-.07,angle:Math.PI/2,radius:.026},{x,angle:Math.PI,radius:.035}].map(port=>{
     const cutter=new THREE.CylinderGeometry(port.radius,port.radius,.14,16);
     cutter.rotateX(port.angle);cutter.translate(port.x,.30*Math.cos(port.angle),.30*Math.sin(port.angle));
@@ -205,21 +214,22 @@ function tiltingJournal(parent,station,mat,steel) {
   named(retainer,'Bearing 3 tilting-pad retainer with through oil passages','bearing-retainer');
   for(let i=0;i<5;i++) {
     const angle=i*TAU/5+.06;
-    named(lathe(parent,[[x-length/2,inner],[x-length/2,outer],[x+length/2,outer],
+    const center=angle+(TAU/5-.12)/2;
+    const pad = subassembly(parent, `Bearing 3 tilting pad ${i+1} with pivots`, [0,-Math.sin(center)*.6,Math.cos(center)*.6]);
+    named(lathe(pad,[[x-length/2,inner],[x-length/2,outer],[x+length/2,outer],
       [x+length/2,inner],[x-length/2,inner]],mat,16,angle,TAU/5-.12),
     `Bearing 3 tilting pad ${i+1}`,'journal-pad');
-    const center=angle+(TAU/5-.12)/2;
     const radial=r=>[x,-Math.sin(center)*r,Math.cos(center)*r];
-    named(rod(parent,radial(outer),radial(.284),.021,steel),'Bearing 3 pad pivot pin','journal-pivot');
-    named(rod(parent,radial(.274),radial(.299),.046,steel,32),
+    named(rod(pad,radial(outer),radial(.284),.021,steel),'Bearing 3 pad pivot pin','journal-pivot');
+    named(rod(pad,radial(.274),radial(.299),.046,steel,32),
       'Bearing 3 circular tilting-pad pivot head','journal-pivot-head');
     for(const side of [-1,1]) {
       const phi=center+side*.36;
       const y=-Math.sin(phi)*.274,z=Math.cos(phi)*.274;
-      named(rod(parent,[x-.108,y,z],[x+.108,y,z],.010,steel),'Bearing 3 pad retaining pin','journal-pin');
+      named(rod(pad,[x-.108,y,z],[x+.108,y,z],.010,steel),'Bearing 3 pad retaining pin','journal-pin');
     }
   }
-  for(const end of [-1,1]) named(ring(parent,x+end*(length/2+.036),.350,.025,.043,steel),
+  for(const end of [-1,1]) named(ring(subassembly(parent, `Bearing 3 locating shoulder ${end}`, [end*.8,0,0]),x+end*(length/2+.036),.350,.025,.043,steel),
     'Bearing 3 retainer locating shoulder','bearing-retainer');
 }
 
@@ -234,7 +244,8 @@ function buildBearings(ctx) {
     // A blind hub pocket has a real floor; the forward bore has two open mouths.
     const floor=blind?[[outer.at(-1)[0],0],[bore.at(-1)[0],0]]:[];
     const profile=[...outer,...floor,...[...bore].reverse(),outer[0]];
-    const mesh=named(lathe(shaft,profile,steel),end==='forward'?'Forward wheel shaft with cooling bore':'Aft wheel shaft with blind hub pocket','rotor-shaft');
+    const shaftGroup = subassembly(shaft, `${end} wheel shaft`, [end==='aft'?.35:-.2,0,0], [end==='aft'?4.6:0,0,0]);
+    const mesh=named(lathe(shaftGroup,profile,steel),end==='forward'?'Forward wheel shaft with cooling bore':'Aft wheel shaft with blind hub pocket','rotor-shaft');
     const cutters=Array.from({length:12},(_,i)=>{
       const angle=i*TAU/12+Math.PI/12;
       const cutter=new THREE.CylinderGeometry(.030,.030,.34,16);
@@ -253,11 +264,11 @@ function buildBearings(ctx) {
       sourceBasis:'Built-up rotor and internal cooling architecture from the training video and GE guide; all internal dimensions and aft closure inferred.',
       inletBoundary:end==='forward'?'Compressor-side feed not recovered':'Third-wheel central bore'};
   }
-  bolts(shaft,5.817,.35,16,.026,bolt);
+  bolts(subassembly(shaft, 'Hot-end coupling fasteners', [.65,0,0], [4.6,0,0]),5.817,.35,16,.026,bolt);
   for(const station of mechanicsDimensions.bearings) {
     const {number,x,radius}=station;
     const bearing=part(ctx,{id:`bearing-${number}`,name:`Bearing ${number}${number===1?' / journal and thrust':''}`,
-      system:'bearings',kind:'detail',explode:[number===1?-1.1:number===3?1.3:0,-.4,0],
+      system:'bearings',kind:'detail',explode:[number===1?-3.8:number===3?4.6:0,0,0],
       sourceTime:number===1?2632:number===2?3066:3251,
       description:number===1?'Split elliptical journal liner and stationary active/inactive thrust pads. The thrust runner belongs to the rotating compressor stub shaft. Open lubrication and sealing-air ports and stationary labyrinth teeth are represented; their sizes and clearances are illustrative.':
         number===2?'Split journal liner inside the discharge barrel, with separated outer air seals, inner oil-control labyrinths, vent and concentric sealing-air connection. Journal size is anchored to the BHEL forward turbine journal; oil-circuit routing is partial.':
@@ -318,5 +329,6 @@ export function buildAssembly() {
     p.group.traverse(o=>{if(o.isMesh){o.userData.partId=p.id;o.userData.kind=p.kind;o.userData.system=p.system;o.name ||= p.name;}});
   }
   ctx.root.updateMatrixWorld(true);
+  ctx.explosion = createExplosionController(ctx);
   return ctx;
 }

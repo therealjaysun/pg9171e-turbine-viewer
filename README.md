@@ -24,7 +24,7 @@ The production site is written to `dist/` and needs an HTTP server, such as `npm
 
 ## Viewer
 
-- Assembled, section, and continuously adjustable exploded views.
+- Assembled, section, and directional exploded views with independent Assembly and Subassemblies sliders. Axial rows separate along the shaft; casings and circumferential segments separate radially. Focus or isolate a part to inspect its internals. See the [motion plan and verification](docs/exploded-view.md).
 - Filled section faces with a display toggle, cavity-aware selection, and open bores preserved across all cut directions. Wireframe leaves section faces unfilled.
 - Shaded, CAD-edge, transparent casing, and wireframe rendering.
 - Orthographic/perspective projection, standard views, orbit/pan/zoom, and image capture.
@@ -34,6 +34,17 @@ The production site is written to `dist/` and needs an HTTP server, such as `npm
 - Slow inspection rotation and illustrative flow particles. Particle paths describe the assembled flow and are hidden in exploded view; they are not a flow simulation.
 - GLB and binary STL export of the full assembled model or the currently visible, separated components.
 - Editable simplified parametric OpenSCAD source.
+
+### Directional exploded inspection
+
+Separate **Assembly** first, then **Subassemblies**. The second control exposes
+131 moving internal groups plus radially separated nozzle instances. Both sliders
+return exactly to the assembled pose. Complete/assembled exports also restore
+child transforms and rotor phase; current-state exports preserve the inspection
+view. The [implementation record](docs/exploded-view.md) describes the direction
+choices and limits.
+
+![Directional exploded subassemblies](exports/directional-exploded-subassemblies.png)
 
 ## Deliverables
 
