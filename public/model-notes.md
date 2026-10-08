@@ -165,3 +165,17 @@ platform detailing is inferred from the established architecture. All new
 dimensions, tang counts and fits are illustrative; no LEC III combustion or
 advanced-aero replacement variant is substituted. The separate OpenSCAD file
 is unchanged.
+
+## Directional Exploded View
+
+The Assembly slider separates axial stacks along the shaft and split casings or
+can families radially. The independent Subassemblies slider opens can internals
+along each canted can axis, withdraws bucket packs axially, fans nozzle cast
+segments radially, and separates bearing packets, shaft sections and exhaust
+turning rings. Zero separation restores the original assembled mesh transforms.
+
+These are illustrative inspection positions, not a collision-free extraction
+sequence or maintenance instruction. Use Focus or Isolate for small assemblies.
+Complete/assembled mesh exports restore all nested transforms and rotor phase;
+current-state exports preserve the visible separated geometry. The separate
+OpenSCAD explosion control retains its earlier simplified behavior.

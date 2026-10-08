@@ -5,6 +5,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { createIcons, icons } from 'lucide';
 import { buildAssembly, systems } from './model/assembly.js';
+import { portableAssembly } from './model/portable-assembly.js';
 import { createSectionCaps } from './section-caps.js';
 import './style.css';
 import { createEducationPanel } from './education/panel.js';
@@ -13,7 +14,7 @@ import { supplyForPart, heatColor } from './supply-chain/index.js';
 const $ = id => document.getElementById(id);
 const icon = name => `<i data-lucide="${name}"></i>`;
 const refreshIcons = () => createIcons({icons,attrs:{'stroke-width':1.6}});
-const state = {view:'section',style:'shaded',explode:0,targetExplode:0,sectionAxis:'z',sectionPosition:0,sectionFlip:1,sectionFill:true,selected:null,selectedSystem:null,isolatedPart:null,hidden:new Set(),casings:true,rotors:true,supports:true,labels:true,flow:false,spinning:false,explodeAnimating:false,orthographic:false};
+const state = {view:'section',style:'shaded',explode:0,targetExplode:0,detail:0,targetDetail:0,sectionAxis:'z',sectionPosition:0,sectionFlip:1,sectionFill:true,selected:null,selectedSystem:null,isolatedPart:null,hidden:new Set(),casings:true,rotors:true,supports:true,labels:true,flow:false,spinning:false,explodeAnimating:false,orthographic:false};
 const originalInspector=$('inspector').innerHTML;
 const container=$('canvas-container');
 const viewport=$('viewport');
@@ -71,8 +72,17 @@ let resizeFitTimer;
 new ResizeObserver(()=>{resize();if(assembly){clearTimeout(resizeFitTimer);resizeFitTimer=setTimeout(()=>fitCamera(null,false,cameraFocusParts),180);}}).observe(container);
 
 function boundsFor(parts=assembly.parts) {
-  const b=new THREE.Box3();
-  for(const p of parts)if(p.group.visible)b.expandByObject(p.group);
+  const b=new THREE.Box3(), box=new THREE.Box3();
+  // Ignore display-only CAD edges: hidden buffers may still describe an older pose.
+  for(const p of parts)if(p.group.visible) {
+    p.group.updateWorldMatrix(true,true);
+    p.group.traverse(object=>{
+      if(!object.isMesh)return;
+      const source=object.isInstancedMesh?object:object.geometry;
+      if(!source.boundingBox)source.computeBoundingBox();
+      b.union(box.copy(source.boundingBox).applyMatrix4(object.matrixWorld));
+    });
+  }
   return b.isEmpty()?new THREE.Box3(new THREE.Vector3(-5,-2,-2),new THREE.Vector3(5,2,2)):b;
 }
 
@@ -87,10 +97,11 @@ function fitCamera(direction,immediate=false,parts) {
   let halfWidth=0,halfHeight=0,depth=0;
   for(const x of [-1,1])for(const y of [-1,1])for(const z of [-1,1]){const v=new THREE.Vector3(x*size.x/2,y*size.y/2,z*size.z/2);halfWidth=Math.max(halfWidth,Math.abs(v.dot(right)));halfHeight=Math.max(halfHeight,Math.abs(v.dot(up)));depth=Math.max(depth,Math.abs(v.dot(dir)));}
   const aspect=container.clientWidth/container.clientHeight;
-  const usableHeight=container.clientWidth<600?.62:.76,usableWidth=container.clientWidth<600?.76:.95;
+  const usableHeight=state.view==='exploded'?.52:container.clientWidth<600?.62:.76,usableWidth=container.clientWidth<600?.76:.95;
   const tangent=Math.tan(THREE.MathUtils.degToRad(perspective.fov/2));
   const distance=Math.max(halfHeight/(tangent*usableHeight),halfWidth/(tangent*aspect*usableWidth))+depth*.4;
   orthoScale=Math.max(halfHeight/usableHeight,halfWidth/(aspect*usableWidth));orthographic.zoom=1;resize();
+  if(state.view==='exploded')center.addScaledVector(up,-halfHeight*.12);
   const next=center.clone().addScaledVector(dir,distance);
   if(immediate){camera.position.copy(next);controls.target.copy(center);controls.update();}
   else cameraTween={from:camera.position.clone(),to:next,fromTarget:controls.target.clone(),toTarget:center,start:performance.now()};
@@ -104,7 +115,7 @@ function switchProjection() {
   $('projection').setAttribute('aria-pressed',String(state.orthographic));
   $('projection').title=state.orthographic?'Perspective projection':'Orthographic projection';
   $('projection').setAttribute('aria-label',$('projection').title);
-  fitCamera(null,true);
+  fitCamera(null,true,cameraFocusParts);
 }
 
 function createEdges(object) {
@@ -113,10 +124,32 @@ function createEdges(object) {
   if(object.isInstancedMesh) {
     const source=base.attributes.position,positions=new Float32Array(source.array.length*object.count),matrix=new THREE.Matrix4(),v=new THREE.Vector3();
     for(let i=0;i<object.count;i++){object.getMatrixAt(i,matrix);for(let j=0;j<source.count;j++){v.fromBufferAttribute(source,j).applyMatrix4(matrix);const k=i*source.array.length+j*3;positions[k]=v.x;positions[k+1]=v.y;positions[k+2]=v.z;}}
-    geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));base.dispose();
+    geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
+    if(object.userData.explodeSegments) geometry.userData.instanceEdges = {source: source.array.slice(), version: object.instanceMatrix.version};
+    base.dispose();
   }
   const edgeMat=new THREE.LineBasicMaterial({color:0x334c48,transparent:true,opacity:.36,depthWrite:false});
-  const lines=new THREE.LineSegments(geometry,edgeMat);lines.visible=false;lines.userData.isEdge=true;object.add(lines);edgeRecords.push({object:lines,material:edgeMat,system:object.userData.system});
+  const lines=new THREE.LineSegments(geometry,edgeMat);lines.visible=false;lines.userData.isEdge=true;object.add(lines);edgeRecords.push({object:lines,material:edgeMat,system:object.userData.system,source:object});
+}
+
+function updateExplodedEdges() {
+  const matrix = new THREE.Matrix4(), v = new THREE.Vector3();
+  for (const edge of edgeRecords) {
+    const data = edge.object.geometry.userData.instanceEdges;
+    if (!data || data.version === edge.source.instanceMatrix.version) continue;
+    const positions = edge.object.geometry.attributes.position;
+    for (let i=0;i<edge.source.count;i++) {
+      edge.source.getMatrixAt(i,matrix);
+      for (let j=0;j<data.source.length;j+=3) {
+        v.fromArray(data.source,j).applyMatrix4(matrix);
+        positions.setXYZ((i*data.source.length+j)/3,v.x,v.y,v.z);
+      }
+    }
+    positions.needsUpdate=true;
+    edge.object.geometry.computeBoundingBox();
+    edge.object.geometry.computeBoundingSphere();
+    data.version=edge.source.instanceMatrix.version;
+  }
 }
 
 function prepareMaterials() {
@@ -222,14 +255,17 @@ function applyVisibility() {
 
 function setView(view) {
   state.view=view;state.explodeAnimating=false;$('explode-play').innerHTML=icon('play');
+  ground.visible=grid.visible=view!=='exploded';
   document.querySelectorAll('[data-view]').forEach(b=>{b.classList.toggle('active',b.dataset.view===view);b.setAttribute('aria-pressed',String(b.dataset.view===view));});
   $('section-controls').hidden=view!=='section';$('explode-controls').hidden=view!=='exploded';
-  const titles={assembled:['ASSEMBLY 01','PG9171E gas turbine','Complete casing and auxiliary details'],section:['SECTION A-A','The complete flow path','Longitudinal section'],exploded:['EXPLODED ASSEMBLY','Inside the Frame 9E','Component separation']};
+  const titles={assembled:['ASSEMBLY 01','PG9171E gas turbine','Complete casing and auxiliary details'],section:['SECTION A-A','The complete flow path','Longitudinal section'],exploded:['EXPLODED ASSEMBLY','Inside the Frame 9E','Axial stacks · radial casings · nested assemblies']};
   [$('view-code').textContent,$('view-title').textContent,$('view-subtitle').textContent]=titles[view];
   state.targetExplode=view==='exploded'?Number($('explode-amount').value)/100:0;
+  state.targetDetail=view==='exploded'?Number($('explode-detail').value)/100:0;
   applySection();
   flowGroup.visible=state.flow&&view!=='exploded'&&!state.isolatedPart&&state.hidden.size===0;
-  setTimeout(()=>fitCamera(null),550);
+  setTimeout(()=>fitCamera(null,false,cameraFocusParts),550);
+  refreshIcons();
 }
 
 function renderTree() {
@@ -301,7 +337,8 @@ function buildLabels() {
     ['turbine','04','3-STAGE TURBINE',[2.65,1.85,0]],
     ['exhaust','05','EXHAUST DIFFUSER',[4.5,2.3,0]],
   ];
-  labels=definitions.map(([system,number,text,point])=>{const el=document.createElement('div');el.className='model-label';el.innerHTML=`<span class="label-index">${number}</span>${text}`;$('label-layer').appendChild(el);return {system,el,point:new THREE.Vector3(...point)};});
+  const anchors={inlet:'inlet-guide-vanes',compressor:'compressor-rotor-9',combustion:'combustor-1',turbine:'turbine-wheel-2',exhaust:'exhaust-turning-vanes'};
+  labels=definitions.map(([system,number,text,point])=>{const el=document.createElement('div');el.className='model-label';el.innerHTML=`<span class="label-index">${number}</span>${text}`;$('label-layer').appendChild(el);return {system,el,point:new THREE.Vector3(...point),anchor:assembly.parts.find(p=>p.id===anchors[system]).group};});
 }
 
 function updateLabels() {
@@ -309,7 +346,7 @@ function updateLabels() {
   for(const label of labels) {
     const visible=state.labels&&!state.isolatedPart&&!state.hidden.has(label.system)&&!state.selected&&(width>620||label.system==='compressor'||label.system==='combustion');
     label.el.hidden=!visible;if(!visible)continue;
-    tempVec.copy(label.point);tempVec.y+=state.explode*1.7;if(label.system==='compressor')tempVec.x-=state.explode;if(label.system==='exhaust')tempVec.x+=state.explode*1.6;
+    tempVec.copy(label.point).add(label.anchor.position);
     tempVec.project(camera);let x=(tempVec.x*.5+.5)*width,y=(-tempVec.y*.5+.5)*height;
     const w=label.el.offsetWidth;const h=label.el.offsetHeight;
     x=THREE.MathUtils.clamp(x,w/2+10,width-w/2-55);y=Math.max(y,151);
@@ -338,26 +375,10 @@ function download(blob,name){const url=URL.createObjectURL(blob);const a=documen
 
 // Expand instances for portable exports and retain the named part hierarchy.
 function exportAssembly(current) {
-  const root=new THREE.Group();root.name='PG9171E DLN1 reconstructed assembly';
-  assembly.root.updateMatrixWorld(true);
-  const inverse=new THREE.Matrix4();const instance=new THREE.Matrix4();
-  for(const p of assembly.parts) {
-    if(current&&!p.group.visible)continue;
-    const group=new THREE.Group();group.name=p.name;group.userData={component:p.id,system:p.system,sourceTime:p.sourceTime,geometry:'Reconstructed; dimensions estimated'};
-    inverse.copy(p.group.matrixWorld).invert();
-    if(current)group.matrix.copy(p.group.matrixWorld);else group.matrix.makeTranslation(...p.origin.toArray());
-    group.matrixAutoUpdate=false;
-    p.group.traverse(o=>{
-      if(!o.isMesh)return;
-      const mat=o.material.clone();mat.clippingPlanes=[];mat.wireframe=false;mat.transparent=false;mat.opacity=1;mat.depthWrite=true;mat.emissive.set(0);
-      const source=materialRecords.find(m=>m.mat===o.material);if(source){mat.color.copy(source.base);mat.metalness=source.metalness;mat.roughness=source.roughness;}
-      const local=new THREE.Matrix4().multiplyMatrices(inverse,o.matrixWorld);
-      const add=transform=>{const m=new THREE.Mesh(o.geometry,mat);m.name=o.name||p.name;m.matrix.copy(transform);m.matrixAutoUpdate=false;group.add(m);};
-      if(o.isInstancedMesh){for(let i=0;i<o.count;i++){o.getMatrixAt(i,instance);add(new THREE.Matrix4().multiplyMatrices(local,instance));}}
-      else add(local);
-    });root.add(group);
-  }
-  root.updateMatrixWorld(true);return root;
+  return portableAssembly(assembly, {current, restoreMaterial(mat, original) {
+    const source=materialRecords.find(m=>m.mat===original);
+    if(source){mat.color.copy(source.base);mat.metalness=source.metalness;mat.roughness=source.roughness;}
+  }});
 }
 
 async function exportModel(format) {
@@ -380,6 +401,7 @@ async function exportModel(format) {
   finally{buttons.forEach(b=>b.disabled=false);const mats=new Set();exported?.traverse(o=>{if(o.isMesh)mats.add(o.material);});mats.forEach(m=>m.dispose());}
 }
 
+let explodeFitTimer;
 function bindControls() {
   document.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>setView(button.dataset.view));
   $('render-style').onchange=e=>{state.style=e.target.value;applyStyle();};
@@ -388,14 +410,19 @@ function bindControls() {
   $('section-position').oninput=e=>{state.sectionPosition=Number(e.target.value);$('section-value').textContent=`${e.target.value}%`;applySection();};
   $('section-flip').onclick=()=>{state.sectionFlip*=-1;applySection();};
   $('section-fill').onchange=e=>{state.sectionFill=e.target.checked;};
-  $('explode-amount').oninput=e=>{state.targetExplode=Number(e.target.value)/100;$('explode-value').textContent=`${e.target.value}%`;state.explodeAnimating=false;};
-  $('explode-amount').onchange=()=>setTimeout(()=>fitCamera(null),400);
+  for (const [id, output, target] of [['explode-amount','explode-value','targetExplode'],['explode-detail','explode-detail-value','targetDetail']]) {
+    $(id).oninput=e=>{
+      state[target]=Number(e.target.value)/100;$(output).textContent=`${e.target.value}%`;
+      state.explodeAnimating=false;$('explode-play').innerHTML=icon('play');refreshIcons();
+    };
+    $(id).onchange=()=>{clearTimeout(explodeFitTimer);explodeFitTimer=setTimeout(()=>fitCamera(null,false,cameraFocusParts),650);};
+  }
   $('explode-play').onclick=()=>{state.explodeAnimating=!state.explodeAnimating;$('explode-play').innerHTML=icon(state.explodeAnimating?'pause':'play');refreshIcons();};
   $('rotate-play').onclick=()=>{state.spinning=!state.spinning;$('rotate-play').setAttribute('aria-pressed',String(state.spinning));$('rotate-play').setAttribute('aria-label',state.spinning?'Pause rotor':'Animate rotor');$('rotate-play').innerHTML=icon(state.spinning?'pause':'play');$('motion-label').textContent=state.spinning?'Inspection speed':'Rotor stopped';refreshIcons();};
   $('projection').onclick=switchProjection;
   $('fit-view').onclick=()=>fitCamera(null);
   $('reset-view').onclick=()=>{selectPart(null);state.sectionPosition=0;state.sectionAxis='z';state.sectionFlip=1;$('section-position').value=0;$('section-value').textContent='0%';$('section-axis').value='z';applySection();fitCamera([-.28,.32,1]);};
-  document.querySelectorAll('[data-camera]').forEach(b=>b.onclick=()=>fitCamera({iso:[-.28,.32,1],side:[0,.02,1],top:[0,1,.001],end:[-1,.01,.01]}[b.dataset.camera]));
+  document.querySelectorAll('[data-camera]').forEach(b=>b.onclick=()=>fitCamera({iso:[-.28,.32,1],side:[0,.02,1],top:[0,1,.001],end:[-1,.01,.01]}[b.dataset.camera],false,cameraFocusParts));
   $('show-all').onclick=()=>{state.hidden.clear();state.isolatedPart=null;state.casings=true;state.rotors=true;state.supports=true;for(const id of ['casings','rotors','supports'])$(id).checked=true;applyVisibility();selectPart(null);fitCamera(null);};
   $('clear-selection').onclick=()=>selectPart(null);
   $('reference-open').onclick=()=>$('references-dialog').showModal();
@@ -411,13 +438,16 @@ function bindControls() {
 function animate(time) {
   const dt=Math.min((time-lastTime)/1000,.05)||0;lastTime=time;frame++;
   if(state.explodeAnimating){state.targetExplode=(Math.sin(time*.0004)+1)*.4;const value=Math.round(state.targetExplode*100);$('explode-amount').value=value;$('explode-value').textContent=`${value}%`;}
-  const prev=state.explode;state.explode=THREE.MathUtils.damp(state.explode,state.targetExplode,7,dt);
-  if(Math.abs(state.explode-prev)>.00001)for(const p of assembly.parts)p.group.position.copy(p.origin).addScaledVector(p.offset,state.explode);
+  const prev=state.explode, prevDetail=state.detail;
+  const approach=(value,target)=>Math.abs(value-target)<.0001?target:THREE.MathUtils.damp(value,target,7,dt);
+  state.explode=approach(state.explode,state.targetExplode);state.detail=approach(state.detail,state.targetDetail);
+  if(state.explode!==prev || state.detail!==prevDetail) assembly.explosion.apply(state.explode,state.detail);
+  if(state.style==='cad') updateExplodedEdges();
   if(state.spinning)for(const r of assembly.rotors)r.rotation.x-=dt*.42;
   if(cameraTween){const t=Math.min((time-cameraTween.start)/650,1),eased=1-(1-t)**3;camera.position.lerpVectors(cameraTween.from,cameraTween.to,eased);controls.target.lerpVectors(cameraTween.fromTarget,cameraTween.toTarget,eased);if(t===1)cameraTween=null;}
   if(state.flow){const pos=flowGroup.children[0].geometry.attributes.position;for(let i=0;i<14;i++)for(let j=0;j<30;j++){const t=(j/30+time*.000035)%1;flowCurves[i].getPointAt(t,tempVec);pos.setXYZ(i*30+j,tempVec.x,tempVec.y,tempVec.z);}pos.needsUpdate=true;}
   controls.update();
-  if(state.selected&&selectionBox.visible){const p=assembly.parts.find(p=>p.id===state.selected);selectionBox.box.setFromObject(p.group);}
+  if(state.selected&&selectionBox.visible){const p=assembly.parts.find(p=>p.id===state.selected);selectionBox.box.copy(boundsFor([p]));}
   updateLabels();updateSectionCaps();renderer.render(scene,camera);
   if(frame%60===0){
     $('mesh-status').textContent=`${(renderer.info.render.triangles/1000).toFixed(0)}k TRIANGLES`;
@@ -429,6 +459,6 @@ function animate(time) {
 try {
   assembly=buildAssembly();supplyRecords=new Map(assembly.parts.map(p=>[p.id,supplyForPart(p)]));educationPanel=createEducationPanel({systems,parts:assembly.parts,onNavigate:navigateToSupplyPart,onHeatmap:setHeatmap});scene.add(assembly.root);prepareMaterials();sectionCaps=createSectionCaps({parts:assembly.parts,plane:sectionPlane});scene.add(sectionCaps.group);buildLabels();buildFlow();renderTree();bindControls();applyStyle();resize();fitCamera([-.28,.32,1],true);refreshIcons();$('loading').hidden=true;
   // Read-only diagnostics expose meaningful model and renderer state for verification.
-  window.__turbineDiagnostics=()=>({selected:state.selected,heatmap,cameraTarget:controls.target.toArray(),focusedPartIds:cameraFocusParts?.map(p=>p.id)||[],heatColors:Object.fromEntries(assembly.parts.map(p=>[p.id,materialRecords.find(m=>m.id===p.id)?.mat.color.getHexString()])),parts:assembly.parts.length,view:state.view,style:state.style,explosion:state.explode,spinning:state.spinning,visibleParts:assembly.parts.filter(p=>p.group.visible).length,triangles:renderer.info.render.triangles,drawCalls:renderer.info.render.calls,canvas:[renderer.domElement.width,renderer.domElement.height],camera:camera.position.toArray(),partIds:assembly.parts.map(p=>p.id),rotorAngle:assembly.rotors[0].rotation.x,sectionCaps:sectionCaps.diagnostics()});
+  window.__turbineDiagnostics=()=>({selected:state.selected,heatmap,cameraTarget:controls.target.toArray(),focusedPartIds:cameraFocusParts?.map(p=>p.id)||[],heatColors:Object.fromEntries(assembly.parts.map(p=>[p.id,materialRecords.find(m=>m.id===p.id)?.mat.color.getHexString()])),parts:assembly.parts.length,view:state.view,style:state.style,explosion:state.explode,subassemblySeparation:state.detail,explosionGroups:assembly.explosion.diagnostics,spinning:state.spinning,visibleParts:assembly.parts.filter(p=>p.group.visible).length,triangles:renderer.info.render.triangles,drawCalls:renderer.info.render.calls,canvas:[renderer.domElement.width,renderer.domElement.height],camera:camera.position.toArray(),partIds:assembly.parts.map(p=>p.id),rotorAngle:assembly.rotors[0].rotation.x,sectionCaps:sectionCaps.diagnostics()});
   requestAnimationFrame(animate);
 }catch(error){console.error(error);$('loading').innerHTML=`<span>Unable to build the turbine model.</span><span>${error.message}</span>`;}

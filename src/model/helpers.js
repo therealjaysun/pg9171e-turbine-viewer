@@ -23,6 +23,15 @@ export function part(ctx, options) {
   return group;
 }
 
+// Offsets are translations in the parent's coordinates; geometry stays assembled.
+export function subassembly(parent, name, detail = [0,0,0], assembly = [0,0,0]) {
+  const group = new THREE.Group();
+  group.name = name;
+  group.userData.explosion = {detail, assembly};
+  parent.add(group);
+  return group;
+}
+
 export function mesh(parent, geometry, mat, position = [0,0,0]) {
   const object = new THREE.Mesh(geometry, mat);
   object.position.set(...position);

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {
-  TAU, palette, material, part, mesh, cylinder, lathe, ring, box,
+  TAU, palette, material, part, subassembly, mesh, cylinder, lathe, ring, box,
   rod, hollowTube, bolts, bladeRow, splitCasing,
 } from './helpers.js';
 import {subtractGeometry} from './csg.js';
@@ -208,35 +208,38 @@ export function buildCompressor(ctx) {
     id: 'compressor-stub-shafts', name: 'Compressor stub shafts & tie bolts', system: 'compressor', kind: 'rotor',
     description: 'Two stub shafts and sixteen axial tie bolts clamp the seventeen compressor wheels. The forward stub includes the thrust collar, journal, auxiliary drive flange and speed ring.',
     facts: [['Construction', '15 wheels + 2 integral stub-shaft wheels'], ['Tie bolts', '16'], ['Forward journal', '400 mm diameter (BHEL reference)'], ['Speed ring', '60 teeth']],
-    explode: [-1.0, -0.12, 0], sourceTime: 98,
+    explode: [0, 0, 0], sourceTime: 98,
   });
   rotors.push(assembly);
-  mark(cylinder(assembly, -5.75, -4.52, 0.2, 0.2, steel, 64), 'compressor-forward-journal', {radius: 0.2});
-  lathe(assembly, [[-4.52, 0.19], [-4.52, 0.20], [-4.31, 0.42], [-4.105, 0.545],
+  const forward = subassembly(assembly, 'Forward compressor stub shaft', [-.4,0,0], [-3.8,0,0]);
+  mark(cylinder(forward, -5.75, -4.52, 0.2, 0.2, steel, 64), 'compressor-forward-journal', {radius: 0.2});
+  lathe(forward, [[-4.52, 0.19], [-4.52, 0.20], [-4.31, 0.42], [-4.105, 0.545],
     [-4.023, drumAt(-4.023)], [FIRST_STAGE - 0.035, 0.620], [FIRST_STAGE - 0.035, 0.19], [-4.52, 0.19]], diskSteel, 72);
-  ring(assembly, -5.64, 0.32, 0.09, 0.16, steel);
-  bolts(assembly, -5.70, 0.265, 12, 0.029, boltMaterial);
-  mark(ring(assembly, -5.22, 0.335, 0.075, 0.145, steel), 'compressor-thrust-runner', {station: -5.22, width: 0.075, radius: 0.335});
-  ring(assembly, -5.50, 0.356, 0.045, 0.17, darkSteel);
-  instances(assembly, new THREE.BoxGeometry(0.057, 0.032, 0.017), steel,
+  ring(forward, -5.64, 0.32, 0.09, 0.16, steel);
+  bolts(forward, -5.70, 0.265, 12, 0.029, boltMaterial);
+  mark(ring(forward, -5.22, 0.335, 0.075, 0.145, steel), 'compressor-thrust-runner', {station: -5.22, width: 0.075, radius: 0.335});
+  ring(forward, -5.50, 0.356, 0.045, 0.17, darkSteel);
+  instances(forward, new THREE.BoxGeometry(0.057, 0.032, 0.017), steel,
     Array.from({length: 60}, (_, i) => {
       const angle = TAU * i / 60;
       return {position: [-5.50, 0.361 * Math.cos(angle), 0.361 * Math.sin(angle)], rotation: [angle, 0, 0]};
     }));
-  cylinder(assembly, LAST_STAGE + STAGE_PITCH / 2, -0.37, drumAt(LAST_STAGE + STAGE_PITCH / 2), 0.38, diskSteel);
-  cylinder(assembly, -0.37, 0.14, 0.30, 0.22, steel);
-  ring(assembly, 0.095, 0.4, 0.095, 0.2, steel);
-  bolts(assembly, 0.151, 0.328, 16, 0.03, boltMaterial);
-  for (let i = 0; i < 9; i++) ring(assembly, -0.365 + i * 0.033, 0.321, 0.012, 0.03, steel);
+  const aft = subassembly(assembly, 'Aft compressor stub shaft and cooling fan', [.3,0,0]);
+  cylinder(aft, LAST_STAGE + STAGE_PITCH / 2, -0.37, drumAt(LAST_STAGE + STAGE_PITCH / 2), 0.38, diskSteel);
+  cylinder(aft, -0.37, 0.14, 0.30, 0.22, steel);
+  ring(aft, 0.095, 0.4, 0.095, 0.2, steel);
+  bolts(aft, 0.151, 0.328, 16, 0.03, boltMaterial);
+  for (let i = 0; i < 9; i++) ring(aft, -0.365 + i * 0.033, 0.321, 0.012, 0.03, steel);
+  const ties = subassembly(assembly, 'Sixteen compressor tie bolts and nuts', [-1.8,0,0], [-4.2,0,0]);
   for (let i = 0; i < 16; i++) {
     const angle = TAU * i / 16;
-    rod(assembly, [FIRST_STAGE - 0.035, 0.48 * Math.cos(angle), 0.48 * Math.sin(angle)], [LAST_STAGE + 0.035, 0.48 * Math.cos(angle), 0.48 * Math.sin(angle)], 0.025, steel);
+    rod(ties, [FIRST_STAGE - 0.035, 0.48 * Math.cos(angle), 0.48 * Math.sin(angle)], [LAST_STAGE + 0.035, 0.48 * Math.cos(angle), 0.48 * Math.sin(angle)], 0.025, steel);
   }
-  bolts(assembly, FIRST_STAGE - 0.055, 0.48, 16, 0.041, boltMaterial);
-  bolts(assembly, LAST_STAGE + 0.055, 0.48, 16, 0.041, boltMaterial);
+  bolts(ties, FIRST_STAGE - 0.055, 0.48, 16, 0.041, boltMaterial);
+  bolts(ties, LAST_STAGE + 0.055, 0.48, 16, 0.041, boltMaterial);
   for (let i = 0; i < 16; i++) {
     const angle = TAU * (i + 0.5) / 16;
-    const vane = box(assembly, [0.044, 0.20, 0.012], [-0.782, 0.53 * Math.cos(angle), 0.53 * Math.sin(angle)], diskSteel);
+    const vane = box(aft, [0.044, 0.20, 0.012], [-0.782, 0.53 * Math.cos(angle), 0.53 * Math.sin(angle)], diskSteel);
     vane.rotation.x = angle;
     mark(vane, 'compressor-aft-cooling-fan', {bladeCountEstimated: true});
   }
@@ -252,7 +255,7 @@ export function buildCompressor(ctx) {
       id: `compressor-rotor-${stage}`, name: `Compressor rotor · stage ${String(stage).padStart(2, '0')}`, system: 'compressor', kind: 'rotor',
       description: 'Cambered rotor airfoils accelerate the air. The annular wheel web has sixteen actual tie-bolt bores; rim and spacer lands form a continuous rotor drum. Airfoil profiles, axial clearances and per-row blade counts remain reconstructed estimates.',
       facts: [['Stage', `${stage} of 17`], ['Row', 'Rotating'], ['Blade count', `${count} rendered / estimated`], ['Assembly', stage === 1 ? 'Forward stub integral wheel' : stage === 17 ? 'Aft stub integral wheel' : 'Individual wheel and spacers']],
-      explode: [-2.4 + ratio * 2.5, 0, 0], sourceTime: 98,
+      explode: [-3.3 + ratio * 2.88, 0, 0], sourceTime: 98,
     });
     wheelWeb(rotor, x, root - 0.045, diskSteel);
     const left = x - STAGE_PITCH / 2, right = x + STAGE_PITCH / 2;
@@ -272,7 +275,7 @@ export function buildCompressor(ctx) {
       id: `compressor-stator-${stage}`, name: `Compressor stator · stage ${String(stage).padStart(2, '0')}`, system: 'compressor', kind: 'stator',
       description: 'The stationary airfoils turn the compressor flow and recover pressure between rotor rows. First-eight-stage vanes use carrier ring segments; later rows mount directly in casing grooves.',
       facts: [['Stage', `${stage} of 17`], ['Row', 'Stationary'], ['Airfoil geometry', 'Reconstructed'], ['Mounting', stage <= 8 ? 'Dovetails in carrier ring segments' : 'Square-base dovetails in casing grooves']],
-      explode: [-2.4 + ratio * 2.5 + 0.035, 0.0, 0], sourceTime: 520,
+      explode: [-3.3 + ratio * 2.88 + 0.09, 0, 0], sourceTime: 520,
     });
     const sx = x + 0.112, outer = passageAt(sx);
     mark(bladeRow(stator, sx, count + 6, {root: drumAt(sx) + 0.012, tip: outer - 0.007, chord: 0.093 - ratio * 0.014, twist: -0.64, sweep: -0.006, thickness: 0.085, camber: -0.06}, statorSteel, 0.031),
@@ -285,14 +288,15 @@ export function buildCompressor(ctx) {
     id: 'compressor-exit-guides', name: 'Exit guide vanes · EGV 1 & 2', system: 'compressor', kind: 'stator',
     description: 'Two stationary exit-guide-vane rows follow the seventeenth stage and remove residual swirl before the discharge diffuser.',
     facts: [['Rows', '2'], ['Location', 'After compressor stage 17'], ['Geometry', 'Reconstructed shrouded vanes']],
-    explode: [0.6, 0, 0], sourceTime: 548,
+    explode: [0.0, 0, 0], sourceTime: 548,
   });
   for (const [i, x] of [-0.435, -0.29].entries()) {
+    const row = subassembly(exitGuides, `Exit guide vane row ${i+1}`, [i ? .18 : -.18,0,0]);
     const inner = 0.777 + 0.022 * (x + 0.525) / 0.325 + 0.004, outer = passageAt(x);
-    mark(bladeRow(exitGuides, x, 80, {root: inner, tip: outer - 0.007, chord: 0.092, twist: -0.2, sweep: 0.005, thickness: 0.08, camber: 0.03}, statorSteel),
+    mark(bladeRow(row, x, 80, {root: inner, tip: outer - 0.007, chord: 0.092, twist: -0.2, sweep: 0.005, thickness: 0.08, camber: 0.03}, statorSteel),
       'compressor-egv-airfoil', {row: i + 1, station: x});
-    ring(exitGuides, x, outer + 0.025, 0.050, 0.034, statorSteel);
-    ring(exitGuides, x, inner + 0.004, 0.062, 0.026, darkSteel);
+    ring(row, x, outer + 0.025, 0.050, 0.034, statorSteel);
+    ring(row, x, inner + 0.004, 0.062, 0.026, darkSteel);
   }
   mark(lathe(exitGuides, [[-0.525, 0.765], [-0.525, 0.777], [-0.20, 0.799],
     [-0.20, 0.784], [-0.525, 0.765]], darkSteel), 'compressor-egv-inner-diffuser');
@@ -309,7 +313,7 @@ export function buildCompressor(ctx) {
         id: `compressor-casing-${section.key}-${half}`, name: `${section.title} · ${half}`, system: 'compressor', kind: 'casing',
         description: 'Horizontally split, flange-bolted casing with a tapered internal gas path, fitted stator-carrier recesses and open cooling/surge bleed ports. The fitted reconstruction removes gross component overlaps; it does not specify OEM running clearances.',
         facts: [['Stator stages', section.stages], ['Split', 'Horizontal'], ['Shell dimensions', 'Reconstructed from source proportions']],
-        explode: [section.distance, sign * 1.75, 0], sourceTime: section.time,
+        explode: [0, sign * 2.6, 0], sourceTime: section.time,
       });
       const profile = casingProfile(section.x0, section.x1, section.r0, section.r1);
       const body = mark(splitCasing(shell, profile, shellMaterial, {half}), 'compressor-casing-wall', {section: section.key, half});
@@ -351,7 +355,7 @@ export function buildCompressor(ctx) {
     id: 'inlet-guide-vanes', name: '64 variable inlet guide vanes', system: 'inlet', kind: 'stator',
     description: 'Sixty-four inlet guide vanes meter compressor airflow. Pinion gears on the vane stems engage the circumferential control ring, moved by a hydraulic actuator.',
     facts: [['Vanes', '64'], ['Opening range', '34-84 degrees'], ['Inner supports', '16 segments, four vanes each'], ['Geometry', 'Intermediate opening; gear tooth counts inferred']],
-    explode: [-2.8, 0, 0], sourceTime: 244,
+    explode: [-3.8, 0, 0], sourceTime: 244,
   });
   mark(bladeRow(guideVanes, -4.19, 64, {root: 0.575, tip: 1.105, chord: 0.170, twist: -0.28, sweep: 0.010, thickness: 0.09, camber: 0.035}, steel),
     'compressor-igv-airfoil', {station: -4.19});
@@ -391,7 +395,7 @@ export function buildCompressor(ctx) {
   const actuator = part(ctx, {
     id: 'igv-actuator', name: 'IGV hydraulic actuator & linkage', system: 'inlet', kind: 'detail',
     description: 'Hydraulic actuator and short tangential linkage position the inlet-guide-vane control ring. The linkage layout is a visual reconstruction.',
-    facts: [['Actuation', 'Hydraulic'], ['Driven assembly', 'IGV control ring']], explode: [-2.4, -0.5, 1.0], sourceTime: 291,
+    facts: [['Actuation', 'Hydraulic'], ['Driven assembly', 'IGV control ring']], explode: [0, -1.3, 2.6], sourceTime: 291,
   });
   rod(actuator, [-4.05, -0.42, 1.25], [-3.65, -0.95, 1.25], 0.088, inletMaterial, 24);
   rod(actuator, [-4.05, -0.42, 1.25], [-4.25, -0.15, 1.25], 0.035, steel, 16);
@@ -408,7 +412,7 @@ export function buildCompressor(ctx) {
       id: `inlet-casing-${half}`, name: `Radial inlet casing · ${half}`, system: 'inlet', kind: 'casing',
       description: 'Industrial radial-inlet collector, internal bellmouth and bearing support structure. Air enters around the inlet casing and turns downstream into the axial compressor.',
       facts: [['Inlet type', 'Radial collector'], ['Supports', 'No. 1 bearing and variable IGVs'], ['Envelope', 'Reconstructed from section references']],
-      explode: [-3.1, sign * 1.6, 0], sourceTime: 244,
+      explode: [0, sign * 2.6, 0], sourceTime: 244,
     });
     const frontPlate = [[-5.21, 0.465], [-5.21, 1.38], [-5.10, 1.38], [-5.10, 0.465], [-5.21, 0.465]];
     mark(splitCasing(inlet, frontPlate, inletMaterial, {half}), 'compressor-inlet-front-plate', {bore: 0.465});

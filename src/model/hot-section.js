@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {
-  TAU, palette, material, part, mesh, lathe, ring, box, rod,
+  TAU, palette, material, part, subassembly, mesh, lathe, ring, box, rod,
   bolts, bladeRow, splitCasing, hollowTube,
 } from './helpers.js';
 import {piercedSleeve, piercedPlate, hollowRod, cooledBladeRow, cooledNozzleRow, nozzleOuterPlatform,
@@ -155,9 +155,12 @@ function addJointRails(parent, x0, x1, radius, half, mat, boltMat) {
   }
 }
 
-function turbineShroud(parent, x, radius, chord, count, mat) {
+function turbineShroud(parent, x, radius, chord, count, mat, fan = false) {
   for (let j = 0; j < count; j++) {
-    lathe(parent, [[x - chord / 2, radius - 0.025], [x - chord / 2, radius + 0.018],
+    const angle = (j + .5) * TAU / count;
+    const target = fan ? subassembly(parent, `Nozzle outer segment ${j + 1}`,
+      [0, -Math.sin(angle) * .55, Math.cos(angle) * .55]) : parent;
+    lathe(target, [[x - chord / 2, radius - 0.025], [x - chord / 2, radius + 0.018],
       [x + chord / 2, radius + 0.018], [x + chord / 2, radius - 0.025],
       [x - chord / 2, radius - 0.025]], mat, 6, j * TAU / count + 0.004, TAU / count - 0.008);
   }
@@ -165,16 +168,20 @@ function turbineShroud(parent, x, radius, chord, count, mat) {
 
 function mergePartMeshes(group) {
   group.updateWorldMatrix(true, true);
-  const inverse = group.matrixWorld.clone().invert();
   const buckets = new Map();
   group.traverse(object => {
     if (!object.isMesh || object.isInstancedMesh || Array.isArray(object.material)) return;
-    const key = object.material.uuid;
+    let owner = object.parent;
+    while (owner !== group && !owner.userData.explosion) owner = owner.parent;
+    const key = `${owner.uuid}:${object.material.uuid}`;
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key).push(object);
   });
   for (const objects of buckets.values()) {
     if (objects.length < 2) continue;
+    let owner = objects[0].parent;
+    while (owner !== group && !owner.userData.explosion) owner = owner.parent;
+    const inverse = owner.matrixWorld.clone().invert();
     const geometries = objects.map(object => {
       const geometry = object.geometry.clone();
       geometry.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, object.matrixWorld));
@@ -190,8 +197,8 @@ function mergePartMeshes(group) {
       : geometries;
     const combined = mergeGeometries(compatible, false);
     if (combined) {
-      const result = mesh(group, combined, objects[0].material);
-      result.name = `${group.name} surfaces`;
+      const result = mesh(owner, combined, objects[0].material);
+      result.name = `${owner.name || group.name} surfaces`;
       for (const object of objects) {
         object.removeFromParent();
         object.geometry.dispose();
@@ -224,7 +231,7 @@ export function buildHotSection(ctx) {
       system: 'combustion', kind: 'casing', sourceTime: 660,
       description: 'Horizontally split pressure plenum surrounding the fourteen DLN1 combustion assemblies. Its forward face is canted 13 degrees.',
       facts: [['Construction', 'Horizontally split'], ['Forward face', '13 deg'], ['Chambers', '14']],
-      explode: [0, half === 'upper' ? 2.3 : -1.0, 0],
+      explode: [0, half === 'upper' ? 3.4 : -3.4, 0],
     });
     splitCasing(wrapper, [[-0.16, 2.10], [0.42, 2.10], [0.86, 1.96],
       [1.41, 1.69], [1.70, 1.36], [1.70, 1.26], [1.40, 1.59],
@@ -248,7 +255,7 @@ export function buildHotSection(ctx) {
     id: 'compressor-discharge-inner-barrel', name: 'Discharge diffuser and inner barrel',
     system: 'combustion', kind: 'stator', sourceTime: 374,
     description: 'The expanding compressor discharge passage feeds the reverse-flow combustion plenum. Twelve radial struts support the inner barrel and turbine nozzle support region.',
-    facts: [['Support struts', '12'], ['Flow', 'Diffusion to wrapper']], explode: [0, 0, -0.5],
+    facts: [['Support struts', '12'], ['Flow', 'Diffusion to wrapper']], explode: [0.3, 0, 0],
   });
   lathe(discharge, [[-0.20, 0.799], [0.12, 0.75], [0.58, 0.59],
     [1.16, 0.55], [1.57, 0.70], [1.65, 0.742], [1.65, 0.69],
@@ -270,7 +277,7 @@ export function buildHotSection(ctx) {
   for (let i = 0; i < CAN_COUNT; i++) {
     const angle = i * TAU / CAN_COUNT;
     const number = i + 1;
-    const vector = [0, Math.cos(angle) * 1.05, Math.sin(angle) * 1.05];
+    const vector = [0, Math.cos(angle) * 1.5, Math.sin(angle) * 1.5];
     const can = part(ctx, {
       id: `combustor-${number}`, name: `DLN1 combustor ${String(number).padStart(2, '0')}`,
       system: 'combustion', kind: 'casing', sourceTime: 564,
@@ -292,28 +299,30 @@ export function buildHotSection(ctx) {
       sleevePositions.setXYZ(v, x, y * (radius - reduction) / radius, z * (radius - reduction) / radius);
     }
     sleeve.geometry.computeVertexNormals();
+    const cover = subassembly(frame, 'Combustor end cover and fasteners', [-2.1,0,0]);
+    const injectors = subassembly(frame, 'Six primary and one secondary fuel nozzle', [-3.15,0,0]);
     const capHoles = Array.from({length: 6}, (_, j) => ({y: Math.cos(j * TAU / 6) * 0.167, z: Math.sin(j * TAU / 6) * 0.167, radius: 0.045}));
-    piercedPlate(frame, {x0: -0.225, x1: -0.17, outer: 0.32, holes: [...capHoles, {y: 0, z: 0, radius: 0.052}], material: mats.steel});
+    piercedPlate(cover, {x0: -0.225, x1: -0.17, outer: 0.32, holes: [...capHoles, {y: 0, z: 0, radius: 0.052}], material: mats.steel});
     ring(frame, -0.155, 0.329, 0.063, 0.07, mats.steel, 40);
-    bolts(frame, -0.265, 0.292, 12, 0.022, mats.bolt);
+    bolts(cover, -0.265, 0.292, 12, 0.022, mats.bolt);
     ring(frame, 0.888, 0.263, 0.018, 0.019, mats.steel, 40);
     for (let k = 0; k < 6; k++) {
       const phi = k * TAU / 6;
       const nozzle = new THREE.Group();
       nozzle.position.set(0, Math.cos(phi) * 0.167, Math.sin(phi) * 0.167);
-      frame.add(nozzle);
+      injectors.add(nozzle);
       lathe(nozzle, [[-0.31, 0.043], [0.055, 0.035], [0.055, 0.021], [-0.31, 0.029], [-0.31, 0.043]], mats.fuel, 24);
       ring(nozzle, -0.30, 0.063, 0.034, 0.026, mats.steel, 20);
       lathe(nozzle, [[-0.349, 0.036], [-0.31, 0.036], [-0.31, 0.024], [-0.349, 0.024], [-0.349, 0.036]], mats.bolt, 6);
-      hollowTube(frame, [[-0.31, Math.cos(phi) * 0.17, Math.sin(phi) * 0.17],
+      hollowTube(injectors, [[-0.31, Math.cos(phi) * 0.17, Math.sin(phi) * 0.17],
         [-0.40, Math.cos(phi) * 0.18, Math.sin(phi) * 0.18],
         [-0.45, Math.cos(phi) * 0.105, Math.sin(phi) * 0.105]], 0.009, 0.003, mats.steel, 12);
     }
-    lathe(frame, [[-0.46, 0.049], [0.60, 0.036], [0.65, 0.031], [0.65, 0.019],
+    lathe(injectors, [[-0.46, 0.049], [0.60, 0.036], [0.65, 0.031], [0.65, 0.019],
       [0.60, 0.024], [-0.46, 0.037], [-0.46, 0.049]], mats.steel, 32);
-    ring(frame, -0.345, 0.084, 0.043, 0.03, mats.chamber, 24);
-    bolts(frame, -0.372, 0.065, 6, 0.012, mats.bolt);
-    hollowTube(frame, [[-0.42, 0, 0], [-0.50, 0.08, 0], [-0.46, 0.37, 0]], 0.021, 0.006, mats.fuel, 16);
+    ring(injectors, -0.345, 0.084, 0.043, 0.03, mats.chamber, 24);
+    bolts(injectors, -0.372, 0.065, 6, 0.012, mats.bolt);
+    hollowTube(injectors, [[-0.42, 0, 0], [-0.50, 0.08, 0], [-0.46, 0.37, 0]], 0.021, 0.006, mats.fuel, 16);
     port(frame, 0.14, 0.287, Math.PI / 2, 0.055, mats.steel);
     port(frame, 0.14, 0.287, -Math.PI / 2, 0.055, mats.steel);
     can.userData.channels = {sleeveInnerRadius: 0.269, linerOuterRadius: 0.246, airJacketRadialGap: 0.023,
@@ -333,9 +342,10 @@ export function buildHotSection(ctx) {
       system: 'combustion', kind: 'detail', sourceTime: 736,
       description: 'DLN1 liner with multi-nozzle cap, Venturi, cooling rings and three downstream dilution ports. The aft end slips into the transition piece to accommodate expansion.',
       facts: [['Cooling', 'Film and impingement'], ['Dilution ports', '3'], ['Liner support', '3 forward stops']],
-      explode: [0.08, vector[1] * 1.13, vector[2] * 1.13],
+      explode: vector,
     });
     const linerFrame = canFrame(liner, angle);
+    linerFrame.userData.explosion = {detail: new THREE.Vector3(-1.5,0,0).applyQuaternion(linerFrame.quaternion).toArray()};
     const linerHoles = [
       ...[Math.PI / 2, -Math.PI / 2].map(a => ({x: 0.14, angle: a, bore: 0.049})),
       ...Array.from({length: 3}, (_, j) => ({x: 0.80, angle: j * TAU / 3, bore: 0.040})),
@@ -386,8 +396,9 @@ export function buildHotSection(ctx) {
       system: 'combustion', kind: 'detail', sourceTime: 1214,
       description: 'Curved round-to-sector duct joining one combustion liner to one fourteenth of the first-stage nozzle entrance. Includes inlet slip collar and aft support bracket.',
       facts: [['Quantity', '14'], ['Outlet', '1/14 of nozzle annulus'], ['Inner surface', 'Thermal barrier coating']],
-      explode: [0.18, vector[1] * 0.62, vector[2] * 0.62],
+      explode: vector,
     });
+    transition.userData.explosion = {detail: [.65 * CANT_COS, -.65 * CANT_SIN * Math.cos(angle), -.65 * CANT_SIN * Math.sin(angle)]};
     mesh(transition, transitionGeometry(angle), mats.chamber);
     const collar = canFrame(transition, angle);
     ring(collar, 0.93, 0.268, 0.07, 0.027, mats.steel, 40);
@@ -446,32 +457,33 @@ export function buildHotSection(ctx) {
         : `Stage ${stage + 1} carries 92 interlocking tip-shrouded buckets with axial-entry dovetails and twist locks. ${stage === 1 ? 'The buckets are internally air cooled.' : 'The third-stage buckets are not internally air cooled.'}`,
       facts: [['Buckets', '92'], ['Tip', stage === 0 ? 'Unshrouded' : 'Interlocking shroud'],
         ['Cooling', stage < 2 ? 'Internal air cooling' : 'Uncooled']],
-      explode: [0.38 + stage * 0.66, 0, 0],
+      explode: [1.2 + stage * 1.4, 0, 0],
     });
     const wheelHub = lathe(rotor, [[x - 0.16, 0.24], [x - 0.16, 0.42], [x - 0.11, 0.64],
       [x - 0.10, root - 0.04], [x + 0.10, root - 0.04], [x + 0.10, 0.62],
       [x + 0.16, 0.42], [x + 0.16, 0.24], [x - 0.16, 0.24]], mats.dark, 80);
     studBores(wheelHub, x - 0.23, x + 0.23);
+    const bucketPack = subassembly(rotor, 'Axial-entry bucket pack with platforms and tip hardware', [-.45,0,0]);
     const bucketParams = {root: root + 0.01, tip, chord: chords[stage],
       twist: 0.59 - stage * 0.045, sweep: 0.028, thickness: 0.15, camber: 0.19, lean: 0.025,
       coolingStage: stage + 1};
     if (stage < 2) {
       rotor.userData.coolingFeedPaths = wheelCoolingFeeds(wheelHub, x, root - 0.008);
-      bucketRootBand(rotor, x, 92, bucketParams, mats.turbine, 0.012);
-    } else ring(rotor, x, bucketParams.root - 0.004, 0.215, 0.057, mats.turbine, 92);
-    bucketAttachments(rotor, x, 92, bucketParams, mats.turbine, 0.012);
+      bucketRootBand(bucketPack, x, 92, bucketParams, mats.turbine, 0.012);
+    } else ring(bucketPack, x, bucketParams.root - 0.004, 0.215, 0.057, mats.turbine, 92);
+    bucketAttachments(bucketPack, x, 92, bucketParams, mats.turbine, 0.012);
     const rotorBlades = stage < 2 ? cooledBladeRow : bladeRow;
-    rotorBlades(rotor, x, 92, bucketParams,
+    rotorBlades(bucketPack, x, 92, bucketParams,
     stage === 0 ? mats.coating : mats.turbine, 0.012);
-    if (stage === 1) cooledBucketTipShroud(rotor, x, 92, bucketParams, mats.turbine, 0.012);
+    if (stage === 1) cooledBucketTipShroud(bucketPack, x, 92, bucketParams, mats.turbine, 0.012);
     if (stage === 2) {
-      turbineShroud(rotor, x + 0.02, tip + 0.014, chords[stage] * 0.91, 92, mats.turbine);
-      ring(rotor, x - 0.035, tip + 0.04, 0.014, 0.032, mats.steel, 92);
-      ring(rotor, x + 0.065, tip + 0.04, 0.014, 0.032, mats.steel, 92);
+      turbineShroud(bucketPack, x + 0.02, tip + 0.014, chords[stage] * 0.91, 92, mats.turbine);
+      ring(bucketPack, x - 0.035, tip + 0.04, 0.014, 0.032, mats.steel, 92);
+      ring(bucketPack, x + 0.065, tip + 0.04, 0.014, 0.032, mats.steel, 92);
     }
     for (let j = 0; j < 92; j++) {
       const angle = j / 92 * TAU;
-      const lock = box(rotor, [0.017, 0.055, 0.02], radial(x - 0.117, root - 0.035, angle), mats.steel);
+      const lock = box(bucketPack, [0.017, 0.055, 0.02], radial(x - 0.117, root - 0.035, angle), mats.steel);
       lock.rotation.x = angle;
     }
     rotors.push(rotor);
@@ -490,7 +502,7 @@ export function buildHotSection(ctx) {
       description: `Stationary nozzle ring with ${stage === 0 ? '18 twin-vane' : stage === 1 ? '16 triple-vane' : '16 four-vane'} cast segments. It accelerates and turns the hot gas before the rotating bucket row.`,
       facts: [['Vanes', String(vaneCounts[stage])], ['Segments', stage === 0 ? '18 x 2' : stage === 1 ? '16 x 3' : '16 x 4'],
         ['Cooling', stage < 2 ? 'Compressor discharge air' : 'Uncooled']],
-      explode: [stage * 0.66 + 0.08, 0.72, 0],
+      explode: [0.7 + stage * 1.4, 0, 0],
     });
     const nozzleX = x - [0.290, 0.315, 0.330][stage];
     const nozzleParams = {root: root + 0.006, tip: tip + 0.026,
@@ -503,11 +515,15 @@ export function buildHotSection(ctx) {
     else bladeRow(nozzle, nozzleX, vaneCounts[stage], nozzleParams, mats.stator);
     if (stage < 2) nozzleOuterPlatform(nozzle, nozzleX, nozzleParams, vaneCounts[stage], stage ? 16 : 18,
       mats.stator, mats.steel, stage === 0);
-    else turbineShroud(nozzle, nozzleX, tip + 0.047, 0.24, 16, mats.stator);
+    else turbineShroud(nozzle, nozzleX, tip + 0.047, 0.24, 16, mats.stator, true);
     nozzleInnerPlatforms(nozzle, nozzleX, nozzleParams, stage ? 16 : 18, mats.stator, stage === 0);
+    nozzle.traverse(object => {
+      if (object.isInstancedMesh) object.userData.explodeSegments = {count: stage ? 16 : 18, distance: .55};
+    });
     if (stage > 0) {
-      ring(nozzle, nozzleX + 0.025, root - 0.015, 0.14, root - 0.015 - 0.643, mats.stator, 80);
-      for (let k = 0; k < 4; k++) ring(nozzle, nozzleX - 0.01 + k * 0.029, 0.649,
+      const diaphragm = subassembly(nozzle, 'Nozzle diaphragm and labyrinth seals', [-.3,0,0]);
+      ring(diaphragm, nozzleX + 0.025, root - 0.015, 0.14, root - 0.015 - 0.643, mats.stator, 80);
+      for (let k = 0; k < 4; k++) ring(diaphragm, nozzleX - 0.01 + k * 0.029, 0.649,
         0.009, 0.012, mats.bolt, 64);
     }
     nozzle.userData.clearances = {centerX: nozzleX, rotorCenterX: x, estimatedAirfoilAxialGap: [0.0293, 0.0305, 0.0301][stage]};
@@ -522,20 +538,22 @@ export function buildHotSection(ctx) {
     id: 'turbine-spacers-studs', name: 'Wheel spacers and 12 through-studs',
     system: 'turbine', kind: 'rotor', sourceTime: 1821,
     description: 'Two bored wheel spacers establish the spacing of three turbine wheels. Radial spacer-face grooves communicate with the rotor cooling cavity; groove count and dimensions are inferred. Twelve through-studs and end nuts clamp the stack at its wheel-shaft flanges.',
-    facts: [['Wheel spacers', '2'], ['Through-studs', '12']], explode: [0.55, -0.6, 0],
+    facts: [['Wheel spacers', '2'], ['Through-studs', '12']], explode: [0, 0, 0],
   });
   wheelSpacers.userData.coolingFacePaths = [];
-  for (const x of [2.26, 2.78]) {
-    const spacer = lathe(wheelSpacers, [[x - 0.10, 0.24], [x - 0.10, 0.42], [x - 0.065, 0.61],
+  for (const [i,x] of [2.26, 2.78].entries()) {
+    const packet = subassembly(wheelSpacers, `Wheel spacer ${i + 1} and rim seals`, [0,0,0], [1.8 + i * 1.4,0,0]);
+    const spacer = lathe(packet, [[x - 0.10, 0.24], [x - 0.10, 0.42], [x - 0.065, 0.61],
       [x + 0.065, 0.61], [x + 0.10, 0.42], [x + 0.10, 0.24], [x - 0.10, 0.24]], mats.dark, 64);
     studBores(spacer, x - 0.17, x + 0.17);
     wheelSpacers.userData.coolingFacePaths.push(...spacerFaceChannels(spacer, x, x === 2.26));
-    for (let k = 0; k < 4; k++) ring(wheelSpacers, x - 0.043 + k * 0.026, 0.629, 0.011, 0.03, mats.steel, 64);
+    for (let k = 0; k < 4; k++) ring(packet, x - 0.043 + k * 0.026, 0.629, 0.011, 0.03, mats.steel, 64);
   }
-  for (let i = 0; i < 12; i++) rod(wheelSpacers,
+  const studs = subassembly(wheelSpacers, 'Twelve through-studs and end nuts', [2.2,0,0], [4.6,0,0]);
+  for (let i = 0; i < 12; i++) rod(studs,
     radial(1.645, 0.475, i * TAU / 12 + Math.PI / 12),
     radial(3.315, 0.475, i * TAU / 12 + Math.PI / 12), 0.027, mats.steel);
-  for (const x of [1.66975, 3.29025]) bolts(wheelSpacers, x, 0.475, 12, 0.045, mats.bolt, Math.PI / 12);
+  for (const x of [1.66975, 3.29025]) bolts(studs, x, 0.475, 12, 0.045, mats.bolt, Math.PI / 12);
   rotors.push(wheelSpacers);
   wheelSpacers.userData.clearances = {spacerSealOuterRadius: 0.629, diaphragmToothInnerRadius: 0.637,
     radialSealGap: 0.008, throughStudRadius: 0.027, studBoreRadius: 0.030,
@@ -548,7 +566,7 @@ export function buildHotSection(ctx) {
       system: 'turbine', kind: 'casing', sourceTime: 1373,
       description: 'Split turbine shell supporting the three stationary nozzle rows and segmented shrouds. Its outer cooling passages limit shell distortion.',
       facts: [['Turbine stages', '3'], ['Construction', 'Horizontal split'], ['Cooling', 'External air passages']],
-      explode: [0.25, half === 'upper' ? 2.05 : -0.8, 0],
+      explode: [0, half === 'upper' ? 3.0 : -3.0, 0],
     });
     splitCasing(casing, [[1.70, 1.26], [1.70, 1.36], [2.12, 1.36], [2.57, 1.47],
       [3.19, 1.60], [3.37, 1.60], [3.37, 1.48], [3.18, 1.48],
@@ -586,7 +604,7 @@ export function buildHotSection(ctx) {
     system: 'exhaust', kind: 'stator', sourceTime: 2411,
     description: 'Ten structural radial struts link the exhaust outer cylinder to the inner cylinder that supports bearing 3. Airfoil fairings shield the struts from hot exhaust.',
     facts: [['Radial struts', '10'], ['Bearing', 'No. 3'], ['Cooling supply ports', '4']],
-    explode: [1.9, 0, 0],
+    explode: [5.1, 0, 0],
   });
   lathe(exhaustFrame, [[3.33, 0.70], [3.53, 0.63], [4.10, 0.56],
     [4.60, 0.59], [4.63, 0.53], [4.08, 0.50], [3.53, 0.57],
@@ -623,7 +641,7 @@ export function buildHotSection(ctx) {
       system: 'exhaust', kind: 'casing', sourceTime: 2561,
       description: 'The divergent annular exhaust passage slows the turbine exit flow. Split inner and outer fabricated surfaces allow access to the exhaust frame and bearing area.',
       facts: [['Passage', 'Divergent annular diffuser'], ['Exit flow', 'Axial to radial']],
-      explode: [2.0, half === 'upper' ? 1.5 : -0.65, 0],
+      explode: [0, half === 'upper' ? 3.0 : -3.0, 0],
     });
     const shell = splitCasing(exhaustShell, [[3.35, 1.52], [3.35, 1.61], [4.28, 1.81],
       [4.55, 1.94], [4.72, 2.13], [4.82, 2.38], [4.90, 2.38],
@@ -650,12 +668,13 @@ export function buildHotSection(ctx) {
     system: 'exhaust', kind: 'stator', sourceTime: 2585,
     description: 'Five concentric turning vanes at the aft diffuser turn exhaust from the axial direction into the radial exhaust plenum. The center remains open for the generator load coupling.',
     facts: [['Turning vanes', '5'], ['Flow deflection', 'Axial to radial'], ['Center', 'Load coupling tunnel']],
-    explode: [2.6, 0, 0],
+    explode: [6.0, 0, 0],
   });
   for (let i = 0; i < 5; i++) {
     const radius = 0.69 + i * 0.225;
     const x = 4.86 - i * 0.11;
-    lathe(turning, [[x, radius], [x + 0.19, radius + 0.006], [x + 0.34, radius + 0.065],
+    const packet = subassembly(turning, `Exhaust turning ring ${i + 1}`, [(4-i)*.65,0,0]);
+    lathe(packet, [[x, radius], [x + 0.19, radius + 0.006], [x + 0.34, radius + 0.065],
       [x + 0.43, radius + 0.17], [x + 0.455, radius + 0.33],
       [x + 0.426, radius + 0.33], [x + 0.40, radius + 0.18],
       [x + 0.32, radius + 0.09], [x + 0.18, radius + 0.035],
