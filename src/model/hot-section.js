@@ -5,7 +5,7 @@ import {
   bolts, bladeRow, splitCasing, hollowTube,
 } from './helpers.js';
 import {piercedSleeve, piercedPlate, hollowRod, cooledBladeRow, cooledNozzleRow, nozzleOuterPlatform,
-  bucketRootBand, cooledBucketTipShroud} from './hot-channels.js';
+  bucketRootBand, bucketAttachments, nozzleInnerPlatforms, cooledBucketTipShroud} from './hot-channels.js';
 import {subtractGeometry} from './csg.js';
 
 const CANT = 13 * Math.PI / 180;
@@ -458,7 +458,8 @@ export function buildHotSection(ctx) {
     if (stage < 2) {
       rotor.userData.coolingFeedPaths = wheelCoolingFeeds(wheelHub, x, root - 0.008);
       bucketRootBand(rotor, x, 92, bucketParams, mats.turbine, 0.012);
-    } else ring(rotor, x, root + 0.019, 0.215, 0.07, mats.turbine, 92);
+    } else ring(rotor, x, bucketParams.root - 0.004, 0.215, 0.057, mats.turbine, 92);
+    bucketAttachments(rotor, x, 92, bucketParams, mats.turbine, 0.012);
     const rotorBlades = stage < 2 ? cooledBladeRow : bladeRow;
     rotorBlades(rotor, x, 92, bucketParams,
     stage === 0 ? mats.coating : mats.turbine, 0.012);
@@ -479,6 +480,9 @@ export function buildHotSection(ctx) {
     rotor.userData.channels = {coolingPassagesPerBucket: [11, 6, 0][stage],
       centralBoreRadius: 0.24, radialWheelFeeds: stage < 2 ? 6 : 0,
       topology: 'Replacement-reference hole counts; inferred spanwise paths and common root collector instead of individual OEM plenums'};
+    rotor.userData.externalDetail = {reference: 'https://www.psm.com/products/b-e-class-frames/9e',
+      scope: 'Photo-informed platforms, shanks and multi-tang attachment end faces; full-depth mating sockets omitted',
+      inferredDimensions: true};
 
     const nozzle = part(ctx, {
       id: `turbine-nozzle-${stage + 1}`, name: `Nozzle stage ${stage + 1} / ${vaneCounts[stage]} vanes`,
@@ -500,7 +504,7 @@ export function buildHotSection(ctx) {
     if (stage < 2) nozzleOuterPlatform(nozzle, nozzleX, nozzleParams, vaneCounts[stage], stage ? 16 : 18,
       mats.stator, mats.steel, stage === 0);
     else turbineShroud(nozzle, nozzleX, tip + 0.047, 0.24, 16, mats.stator);
-    ring(nozzle, nozzleX, root + 0.008, stage === 0 ? 0.20 : 0.14, 0.063, mats.stator, 80);
+    nozzleInnerPlatforms(nozzle, nozzleX, nozzleParams, stage ? 16 : 18, mats.stator, stage === 0);
     if (stage > 0) {
       ring(nozzle, nozzleX + 0.025, root - 0.015, 0.14, root - 0.015 - 0.643, mats.stator, 80);
       for (let k = 0; k < 4; k++) ring(nozzle, nozzleX - 0.01 + k * 0.029, 0.649,
@@ -509,6 +513,9 @@ export function buildHotSection(ctx) {
     nozzle.userData.clearances = {centerX: nozzleX, rotorCenterX: x, estimatedAirfoilAxialGap: [0.0293, 0.0305, 0.0301][stage]};
     nozzle.userData.channels = {hollowPartitions: stage < 2, trailingEdgePortsPerVane: stage < 2 ? 11 : 0,
       impingementCover: stage === 0, topology: stage < 2 ? 'Hollow cavity and trailing-edge exits; inferred cavity contour and hole count' : 'Uncooled'};
+    nozzle.userData.externalDetail = {reference: 'https://www.psm.com/products/b-e-class-frames/9e',
+      scope: 'Photo-informed first/second-stage outer mounting rails and segmented inner platforms; dimensions inferred',
+      inferredDimensions: true};
   }
 
   const wheelSpacers = part(ctx, {

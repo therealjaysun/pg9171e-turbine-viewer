@@ -155,9 +155,9 @@ export function cooledBladeRow(parent, x, count, params, material, phase = 0) {
   return result;
 }
 
-function piercedBucketBand(parent, x, count, params, profile, material, phase, role) {
+function piercedBucketBand(parent, x, count, params, profile, material, phase, role, gap = 0) {
   const pitch = TAU / count, holder = new THREE.Group();
-  const base = lathe(holder, profile, material, 4, -Math.PI / 2 - pitch / 2, pitch);
+  const base = lathe(holder, profile, material, 4, -Math.PI / 2 - pitch / 2 + gap / 2, pitch - gap);
   base.geometry.computeBoundingBox();
   const cutters = [];
   for (const offset of [-2, -1, 0, 1, 2]) for (const {u, radius} of bucketCoolingPattern(params.coolingStage)) {
@@ -173,7 +173,7 @@ function piercedBucketBand(parent, x, count, params, profile, material, phase, r
 }
 
 export function bucketRootBand(parent, x, count, params, material, phase = 0) {
-  const inner = params.root - 0.061, outer = params.root + 0.009;
+  const inner = params.root - 0.061, outer = params.root - 0.004;
   const low = params.root - 0.040, high = params.root - 0.013;
   // A sectioned collector and inward-open feed replace the formerly solid rim.
   // This common gallery is a simplified equivalent of individual root plenums.
@@ -183,6 +183,47 @@ export function bucketRootBand(parent, x, count, params, material, phase = 0) {
   const row = piercedBucketBand(parent, x, count, params, profile, material, phase, 'root-collector');
   row.geometry.userData.rootCollector = {inner, outer, low, high, feedX: 0.035,
     inferredGeometry: true, individualBucketPlenumsSimplified: true};
+  return row;
+}
+
+// Photo-informed external detail only. The cooled rows retain their common
+// internal collector; these end faces do not claim recovered full-depth sockets.
+export function bucketAttachments(parent, x, count, params, material, phase = 0) {
+  const pitch = TAU / count, halfPitch = params.root * Math.sin(pitch / 2);
+  const platform = piercedBucketBand(parent, x, count, params,
+    [[-0.1075, params.root - 0.004], [-0.1075, params.root + 0.009],
+      [0.1075, params.root + 0.009], [0.1075, params.root - 0.004], [-0.1075, params.root - 0.004]],
+    material, phase, 'bucket-platform', 0.002 / params.root);
+  platform.name = 'Individual bucket platforms with open seams';
+  const side = [
+    [-0.126, 0.47], [-0.122, 0.73], [-0.113, 0.73], [-0.107, 0.47],
+    [-0.102, 0.81], [-0.093, 0.81], [-0.087, 0.49],
+    [-0.082, 0.87], [-0.073, 0.87], [-0.064, 0.48],
+    [-0.012, 0.48], [-0.005, 0.96], [0.009, 0.96],
+  ];
+  const outline = side.map(([r, width]) => [width * halfPitch, params.root + r]);
+  outline.push(...side.toReversed().map(([r, width]) => [-width * halfPitch, params.root + r]));
+  const shape = new THREE.Shape(outline.map(([z, r]) => new THREE.Vector2(z, r)));
+  for (const face of [-1, 1]) {
+    const geometry = new THREE.ExtrudeGeometry(shape, {depth: 0.0355, bevelEnabled: false, steps: 1});
+    geometry.rotateY(Math.PI / 2);
+    geometry.translate(face < 0 ? -0.143 : 0.1075, 0, 0);
+    geometry.userData.attachmentFace = {face, inferredGeometry: true, fullDepthSocket: false};
+    const row = radialInstances(parent, geometry, material, x, count, phase);
+    row.name = `${face < 0 ? 'Forward' : 'Aft'} bucket attachment faces and shanks`;
+  }
+}
+
+export function nozzleInnerPlatforms(parent, x, params, segmentCount, material, firstStage) {
+  const outer = params.root + 0.002, half = firstStage ? 0.10 : 0.07;
+  const holder = new THREE.Group(), pitch = TAU / segmentCount;
+  const base = lathe(holder, [[-half, outer - 0.063], [-half, outer], [half, outer],
+    [half, outer - 0.063], [half - 0.018, outer - 0.063], [half - 0.018, outer - 0.048],
+    [-half + 0.018, outer - 0.048], [-half + 0.018, outer - 0.063], [-half, outer - 0.063]],
+    material, 12, -Math.PI / 2 + 0.004, pitch - 0.008);
+  base.geometry.userData.nozzleInnerPlatform = {segmentCount, inferredGeometry: true};
+  const row = radialInstances(parent, base.geometry, material, x, segmentCount);
+  row.name = 'Segmented nozzle inner platforms with underside seal lands';
   return row;
 }
 
@@ -316,13 +357,18 @@ export function cooledNozzleRow(parent, x, count, params, material, minimumEdge 
 export function nozzleOuterPlatform(parent, x, params, vaneCount, segmentCount, material, coverMaterial, hasImpingementCover) {
   const segmentAngle = TAU / segmentCount, vaneAngle = TAU / vaneCount, perSegment = vaneCount / segmentCount;
   const holder = new THREE.Group();
-  const base = lathe(holder, [[-0.14, params.tip - 0.004], [-0.14, params.tip + 0.062],
-    [0.205, params.tip + 0.062], [0.205, params.tip - 0.004], [-0.14, params.tip - 0.004]], material, 12,
+  // Integral stepped mounting rails stay inside the existing axial envelope.
+  // The proportions follow the visible hardware, not a supplier drawing.
+  const base = lathe(holder, [[-0.14, -0.004], [-0.14, 0.090], [-0.100, 0.090],
+    [-0.100, 0.078], [-0.121, 0.078], [-0.121, 0.062], [0.186, 0.062],
+    [0.186, 0.078], [0.165, 0.078], [0.165, 0.090], [0.205, 0.090],
+    [0.205, -0.004], [-0.14, -0.004]].map(([axial, radial]) => [axial, params.tip + radial]), material, 12,
   -Math.PI / 2 + 0.004, segmentAngle - 0.008);
   const cavities = Array.from({length: perSegment}, (_, i) => nozzleCavity(params).rotateX((i + 0.5) * vaneAngle));
   const platform = subtractGeometry(base.geometry, cavities);
   base.geometry.dispose(); cavities.forEach(cavity => cavity.dispose());
   platform.userData.nozzlePlatform = {
+    mountingRails: 2, inferredGeometry: true,
     openings: Array.from({length: perSegment}, (_, i) => new THREE.Vector3(...airfoilPoint(params, 0.4, 1.1)).applyAxisAngle(new THREE.Vector3(1, 0, 0), (i + 0.5) * vaneAngle).toArray()),
     wall: [-0.13, (params.tip + 0.03) * Math.cos(segmentAngle / 2), (params.tip + 0.03) * Math.sin(segmentAngle / 2)],
     feedPaths: Array.from({length: perSegment}, (_, i) => (hasImpingementCover ? [0.25, 0.4, 0.55, 0.7] : [0.4]).map(u => {
@@ -331,10 +377,12 @@ export function nozzleOuterPlatform(parent, x, params, vaneCount, segmentCount, 
         .applyAxisAngle(new THREE.Vector3(1, 0, 0), angle).toArray())};
     })).flat(),
   };
-  radialInstances(parent, platform, material, x, segmentCount).userData.nozzlePlatform = true;
+  const row = radialInstances(parent, platform, material, x, segmentCount);
+  row.userData.nozzlePlatform = true;
+  row.name = 'Segmented nozzle outer platforms and mounting rails';
   if (!hasImpingementCover) return;
   const cover = lathe(holder, [[-0.08, params.tip + 0.063], [-0.08, params.tip + 0.069],
-    [0.22, params.tip + 0.069], [0.22, params.tip + 0.063], [-0.08, params.tip + 0.063]], coverMaterial, 12,
+    [0.16, params.tip + 0.069], [0.16, params.tip + 0.063], [-0.08, params.tip + 0.063]], coverMaterial, 12,
   -Math.PI / 2 + 0.018, segmentAngle - 0.036);
   const holes = [], holeCenters = [];
   for (let i = 0; i < perSegment; i++) for (const u of [0.25, 0.40, 0.55, 0.70]) {

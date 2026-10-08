@@ -15,6 +15,7 @@ The browser model is a detailed visualization mesh. The accompanying `pg9171e.sc
 7. [GE Vernova: 9E gas turbine family](https://www.gevernova.com/gas-power/products/gas-turbines/9e). The family includes PG9171E and later variants. The four-stage 9E.04 module is not the three-stage configuration reconstructed here.
 8. [Sulzer: GE MS9001E-equivalent buckets](https://www.sulzer.com/-/media/files/services/spare-parts/brochures/ge_ms9001e_equivalentbuckets_en_e10255_5_2014_web.pdf?sc_lang=en). Identifies PG9171E-compatible replacement buckets with eleven first-stage cooling holes (eight turbulated) and six second-stage holes. R05 uses these populations as a clearly labeled replacement-reference example, not proof of the exact OEM configuration in the video. Turbulators, passage diameters and coordinates are not recovered.
 9. [GE: development of the 9EMax](https://www.ge.com/news/reports/startup-power-plant-adapting-silicon-valley-methods-building-turbines). Distinguishes traditional radial bucket cooling channels from serpentine cooling introduced on the newer four-stage platform. R05 does not import that newer serpentine network.
+10. [Hanwha Power / PSM: 9E component photographs](https://www.psm.com/products/b-e-class-frames/9e). R06 uses visible bucket attachment and nozzle mounting details as qualitative references. The page includes multiple replacement configurations; these are not dimensioned drawings of the video unit. Some image alt labels are mismatched, so hardware was identified visually.
 
 ## Video Evidence
 
@@ -148,3 +149,19 @@ geometry and supplies no production tolerances or certified material schedule.
 In `pg9171e.scad`, `exploded` is a 0-1 separation control, `cutaway` removes upper shell halves, and `show_casings`, `show_stators`, `show_base` and `component` control visibility. `component` accepts `all`, `inlet`, `compressor`, `combustion`, `turbine`, `exhaust` or `bearings` for separate solid export. Exact known populations remain present; reducing `$fn` changes tessellation only. The compressor rotor and stator blade populations are marked as estimated in the source.
 
 Verification on 2026-10-06: the R03 source parsed and generated the complete default assembly with an OpenSCAD WebAssembly compiler using the Manifold backend. Compilation exited successfully without source warnings; the solid renderer reported `Status: NoError` and 2,188,100 facets. This verifies that the reconstructed solids can be evaluated, not that they match OEM dimensions, clearances or service requirements. The temporary compiler was kept outside the project; no OpenSCAD desktop installation is required to use the browser viewer.
+
+## Revision R06 Photo-informed Hardware
+
+PSM 9E photographs inform individual bucket platforms, narrow shanks and
+representative multi-tang attachment end faces. The end faces do not reconstruct
+full-depth wheel sockets. Cooled stages retain the simplified common collector
+and eleven/six spanwise passage populations. Platform seams are visible and
+platform feed bores remain open.
+
+First-/second-stage outer nozzle platforms have stepped mounting rails, with
+first-stage covers fitted between them. Inner platforms use the existing
+18/16/16 segment populations and include underside seal lands. Third-stage
+platform detailing is inferred from the established architecture. All new
+dimensions, tang counts and fits are illustrative; no LEC III combustion or
+advanced-aero replacement variant is substituted. The separate OpenSCAD file
+is unchanged.
